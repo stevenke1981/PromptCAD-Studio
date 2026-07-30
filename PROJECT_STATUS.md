@@ -16,7 +16,7 @@
 
 ## 本封裝已驗證
 
-- 40 個 pytest 測試通過。
+- 42 個 pytest 測試通過。
 - Python 3.12.13 的 uv 鎖定環境可重現安裝。
 - Ruff 全專案檢查通過（自動排除本機 `.venv` 與生成產物）。
 - Python `compileall` 通過。

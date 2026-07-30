@@ -4,8 +4,8 @@ requested_user_scenario: PASS
 affected_regression: PASS
 critical_flows: PASS
 evidence:
-  tests: 40 passed
-  coverage: 77 percent
+  tests: 42 passed
+  coverage: 78 percent
   planner: standard-agent
   cadquery: completed
   step:
@@ -22,5 +22,7 @@ evidence:
     - compact Chinese NEMA17 routing
     - cm and inch conversion
     - standard geometry mismatch blocking
+    - standard hole-type and through-depth enforcement
+    - configured planner mode routing contract
     - motor-face holes visible in drawing PDF
     - standards and assumptions visible in Web results

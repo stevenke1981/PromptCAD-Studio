@@ -37,14 +37,30 @@ def test_nema17_agent_infers_standard_motor_interface_and_provenance():
 
 
 def test_auto_factory_routes_nema17_to_standard_agent(settings):
+    from app.core.config import Settings
     from app.services.planners.factory import PlannerFactory
 
+    settings = Settings(
+        env="test",
+        data_dir=settings.data_dir,
+        planner_mode="auto",
+        render_backend="source_only",
+    )
     doc, used = asyncio.run(
         PlannerFactory(settings).plan("Create a bracket for a NEMA 17 stepper motor", "auto")
     )
 
     assert used == "standard-agent"
     assert doc.name == "nema17-motor-bracket"
+
+
+def test_configured_rule_mode_is_not_bypassed_by_agent(settings):
+    from app.services.planners.factory import PlannerFactory
+
+    doc, used = asyncio.run(PlannerFactory(settings).plan("NEMA17 馬達支架", "auto"))
+
+    assert used == "rule"
+    assert doc.name != "nema17-motor-bracket"
 
 
 def test_nema17_agent_allows_bracket_parameter_overrides():
@@ -74,6 +90,20 @@ def test_validator_blocks_nema17_geometry_that_claims_standard_provenance():
 
     doc = plan("NEMA17 馬達支架")
     doc.holes[0].x = -14
+
+    report = DesignValidator().validate(doc)
+
+    assert not report.valid
+    assert any(issue.code == "standard_geometry_mismatch" for issue in report.issues)
+
+
+def test_validator_blocks_blind_hole_under_nema17_provenance():
+    from app.models.cad import HoleType
+    from app.services.validator import DesignValidator
+
+    doc = plan("NEMA17 馬達支架")
+    doc.holes[0].hole_type = HoleType.BLIND
+    doc.holes[0].depth = 1
 
     report = DesignValidator().validate(doc)
 

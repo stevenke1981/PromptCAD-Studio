@@ -16,7 +16,7 @@
 - X/Y/Z 軸孔與常見 M 制孔徑輔助。
 - Web JSON 編輯與 `/generate-from-spec`。
 - 驗證失敗阻止 CAD kernel 執行。
-- Token-aware 預覽／下載、路徑安全、Docker、Conda、CI 與 40 項測試。
+- Token-aware 預覽／下載、路徑安全、Docker、Conda、CI 與 42 項測試。
 - uv 鎖定環境與 Python 3.11／3.12 CI 矩陣，讓本機與 GitHub Actions 使用同一套相依版本。
 - 修正全專案 Ruff 掃描誤納入 `.venv` 的問題，並清除既有靜態檢查警告。
 - 修正 Windows 使用相對資料目錄時 renderer 重複拼接工作路徑的問題。

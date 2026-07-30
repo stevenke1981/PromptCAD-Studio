@@ -31,8 +31,8 @@ known_limitations:
   - Physical thread geometry is not generated
   - Docker, OpenSCAD executable, and Conda paths were not run locally
 evidence:
-  - 40 pytest tests passed
-  - app coverage 77 percent
+  - 42 pytest tests passed
+  - app coverage 78 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views

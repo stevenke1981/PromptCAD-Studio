@@ -4,8 +4,8 @@
 
 ## 通過項目
 
-- `pytest -q`：40/40 通過。
-- 測試覆蓋率：`app` 77%。
+- `pytest -q`：42/42 通過。
+- 測試覆蓋率：`app` 78%。
 - `uv sync --frozen --extra dev`：Python 3.12.13 鎖定環境同步通過。
 - `ruff check .`：通過。
 - `python -m compileall -q app scripts tests examples/generated/plate-four-holes/model.py`：通過。

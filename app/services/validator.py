@@ -360,7 +360,13 @@ class DesignValidator:
                 len(motor_holes) == 4
                 and actual == expected
                 and all(abs(hole.diameter - 3.4) < 0.05 for hole in motor_holes)
+                and all(
+                    hole.hole_type == HoleType.CLEARANCE and hole.depth is None
+                    for hole in motor_holes
+                )
                 and len(center_holes) == 1
+                and center_holes[0].hole_type == HoleType.THROUGH
+                and center_holes[0].depth is None
             )
         if not matches:
             issues.append(

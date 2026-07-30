@@ -27,7 +27,10 @@ class PlannerFactory:
         raise PlannerError(f"Unknown planner: {requested}")
 
     async def plan(self, prompt: str, requested: str):
-        if requested in {"auto", "agent"} and self.agent.can_handle(prompt):
+        effective = self.settings.planner_mode if requested == "auto" else requested
+        if effective == "agent" and self.agent.can_handle(prompt):
+            return await self.agent.plan(prompt), self.agent.name
+        if effective == "auto" and self.agent.can_handle(prompt):
             return await self.agent.plan(prompt), self.agent.name
         planner = self.resolve(requested)
         try:
