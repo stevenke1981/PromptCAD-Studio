@@ -9,6 +9,7 @@
 ## 信任邊界
 
 - 使用者 Prompt 與手動 DSL：不可信。
+- 使用者上傳圖片、檔名、MIME、EXIF、DPI 與 Feature Tree：不可信。
 - LLM 回應：不可信，即使 Structured Outputs 驗證成功也只代表格式正確。
 - PromptCAD 編譯器：受信任程式碼。
 - CadQuery／OpenSCAD／OpenCascade：高複雜度原生幾何核心，必須限制資源。
@@ -21,6 +22,7 @@
 - 下載端點路徑穿越。
 - 公開部署沒有認證、TLS、速率限制或租戶隔離。
 - 使用者誤把 AI 草案當作可直接加工的正式工程圖。
+- 壓縮圖片解碼造成記憶體／CPU DoS，或錯誤校準產生比例看似合理但實際錯誤的 CAD。
 
 ## 現有控制
 
@@ -34,6 +36,15 @@
 - 可選 Bearer／X-API-Key，使用 constant-time compare。
 - `.env`、執行輸出、cache 與憑證不進版本控制或 Docker build context。
 - API 回應與 manifest 不保存 LLM API Key。
+- 圖片路由在 multipart 解析前套用 ASGI request-body 上限；整個請求在解析與讀取前先取得固定併發槽，避免暫存磁碟與等待佇列無界成長。
+- 圖片只允許實際解碼為單 frame PNG/JPEG；在 EXIF transpose／像素載入前先驗證 header 尺寸與總像素，並限制壓縮 bytes、單邊尺寸與分析時間。
+- 分析使用固定大小 executor；即使呼叫端逾時，工作完成前仍占用原槽位，不會累積無界背景原生執行緒。
+- 解碼後套用 EXIF orientation 並轉成受控灰階陣列；不信任檔名、MIME、DPI 或 EXIF 尺寸。
+- 原始圖片不寫入 job、artifact 或 ZIP；分析只保存 SHA-256 provenance。
+- 校準保存實際距離、像素端點與 `mm_per_pixel`；角度、對邊平行度與對邊長度不符合矩形條件時不轉 CAD。
+- 伺服器以 HMAC 綁定圖片 SHA-256、尺寸、校準、偵測結果與分析版本；Feature Tree round-trip 及生成時都會驗證 provenance。
+- Feature Tree 使用 operation 與參數白名單、有限值和父子關係驗證，再經既有 `DesignValidator` 才能渲染。
+- Docker Compose 預設只綁定 `127.0.0.1`；公開部署必須另行設定認證、TLS 與速率限制。
 
 ## 部署要求
 

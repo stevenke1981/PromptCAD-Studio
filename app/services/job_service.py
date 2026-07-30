@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
 import mimetypes
+import secrets
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 from app.core.config import Settings
 from app.models.api import Artifact, JobListItem, JobManifest, PlanResponse
 from app.models.cad import CadDocument
+from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 from app.services.compiler import CadQueryCompiler
 from app.services.drawing_pdf import EngineeringDrawingPdf
+from app.services.image_analysis import ImageFeatureExtractor
 from app.services.openscad import OpenScadCompiler
 from app.services.planners.factory import PlannerFactory
 from app.services.preview import SvgPreview
@@ -29,6 +37,17 @@ class JobService:
         self.preview = SvgPreview()
         self.storage = JobStorage(settings)
         self.renderer = Renderer(settings)
+        self.image_extractor = ImageFeatureExtractor(
+            max_bytes=settings.max_image_bytes,
+            max_pixels=settings.max_image_pixels,
+            max_dimension=settings.max_image_dimension,
+        )
+        self._image_slots = asyncio.Semaphore(settings.image_analysis_concurrency)
+        self._image_executor = ThreadPoolExecutor(
+            max_workers=settings.image_analysis_concurrency,
+            thread_name_prefix="promptcad-image",
+        )
+        self._analysis_signing_key = secrets.token_bytes(32)
 
     async def plan(self, prompt: str, planner_choice: str) -> PlanResponse:
         if len(prompt) > self.settings.max_prompt_chars:
@@ -70,6 +89,184 @@ class JobService:
             render=render,
         )
 
+    async def analyze_image(
+        self,
+        data: bytes,
+        *,
+        known_length_mm: float,
+        thickness_mm: float,
+    ):
+        if len(data) > self.settings.max_image_bytes:
+            raise ValueError(f"Image exceeds the {self.settings.max_image_bytes} byte limit")
+        await self._image_slots.acquire()
+        return await self._analyze_admitted(
+            data,
+            known_length_mm=known_length_mm,
+            thickness_mm=thickness_mm,
+        )
+
+    async def analyze_upload(
+        self,
+        upload,
+        *,
+        known_length_mm: float,
+        thickness_mm: float,
+    ) -> ImageAnalysisResponse:
+        await self._image_slots.acquire()
+        try:
+            data = await upload.read(self.settings.max_image_bytes + 1)
+            if len(data) > self.settings.max_image_bytes:
+                raise ValueError(
+                    f"Image exceeds the {self.settings.max_image_bytes} byte limit"
+                )
+        except BaseException:
+            self._image_slots.release()
+            raise
+        return await self._analyze_admitted(
+            data,
+            known_length_mm=known_length_mm,
+            thickness_mm=thickness_mm,
+        )
+
+    async def _analyze_admitted(
+        self,
+        data: bytes,
+        *,
+        known_length_mm: float,
+        thickness_mm: float,
+    ) -> ImageAnalysisResponse:
+        loop = asyncio.get_running_loop()
+        try:
+            future = loop.run_in_executor(
+                self._image_executor,
+                partial(
+                    self.image_extractor.analyze,
+                    data,
+                    known_length_mm=known_length_mm,
+                    thickness_mm=thickness_mm,
+                ),
+            )
+        except BaseException:
+            self._image_slots.release()
+            raise
+        future.add_done_callback(lambda _future: self._image_slots.release())
+        try:
+            result = await asyncio.wait_for(
+                asyncio.shield(future),
+                timeout=self.settings.image_analysis_timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise RuntimeError(
+                "Image analysis timed out; worker capacity remains reserved until it stops"
+            ) from exc
+        return self._sign_analysis(result)
+
+    def image_feature_tree_to_spec(
+        self,
+        analysis: ImageAnalysisResponse,
+        feature_tree: list[FeatureTreeNode],
+    ) -> PlanResponse:
+        self._verify_analysis(analysis)
+        spec = self.image_extractor.spec_from_feature_tree(
+            feature_tree,
+            image_sha256=analysis.image_sha256,
+        )
+        validation = self.validator.validate(spec)
+        return PlanResponse(
+            spec=spec,
+            validation=validation,
+            planner_used="image-feature-tree",
+        )
+
+    async def generate_from_image_feature_tree(
+        self,
+        analysis: ImageAnalysisResponse,
+        feature_tree: list[FeatureTreeNode],
+        *,
+        formats: list[str],
+        render: bool,
+    ) -> JobManifest:
+        plan = self.image_feature_tree_to_spec(
+            analysis,
+            feature_tree,
+        )
+        analysis_payload = analysis.model_dump(
+            mode="json",
+            exclude={
+                "analysis_token",
+                "preview_svg",
+                "proposed_spec",
+                "validation",
+                "feature_tree",
+            },
+        )
+        analysis_payload["feature_tree_file"] = "feature-tree.json"
+        analysis_payload["provenance_verification"] = "verified-before-generation"
+        return await self._materialize(
+            spec=plan.spec,
+            validation=plan.validation,
+            prompt=plan.spec.source_prompt,
+            planner_used="image-feature-tree",
+            formats=formats,
+            render=render,
+            extra_json_artifacts={
+                "image-analysis.json": analysis_payload,
+                "feature-tree.json": [
+                    node.model_dump(mode="json") for node in feature_tree
+                ],
+            },
+        )
+
+    def _sign_analysis(self, analysis: ImageAnalysisResponse) -> ImageAnalysisResponse:
+        token = hmac.new(
+            self._analysis_signing_key,
+            self._analysis_payload(analysis),
+            hashlib.sha256,
+        ).hexdigest()
+        return analysis.model_copy(update={"analysis_token": token})
+
+    def _verify_analysis(self, analysis: ImageAnalysisResponse) -> None:
+        supplied = analysis.analysis_token
+        expected = hmac.new(
+            self._analysis_signing_key,
+            self._analysis_payload(analysis),
+            hashlib.sha256,
+        ).hexdigest()
+        if not supplied or not hmac.compare_digest(supplied, expected):
+            raise ValueError("Image analysis provenance is invalid or expired")
+
+    @staticmethod
+    def _analysis_payload(analysis: ImageAnalysisResponse) -> bytes:
+        value = analysis.model_dump(
+            mode="json",
+            exclude={
+                "analysis_token",
+                "preview_svg",
+                "proposed_spec",
+                "validation",
+                "feature_tree",
+            },
+        )
+
+        def normalize_json(value):
+            if isinstance(value, float) and value == 0:
+                return 0.0
+            if isinstance(value, dict):
+                return {
+                    key: normalize_json(item)
+                    for key, item in value.items()
+                }
+            if isinstance(value, list):
+                return [normalize_json(item) for item in value]
+            return value
+
+        return json.dumps(
+            normalize_json(value),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
     async def _materialize(
         self,
         *,
@@ -79,6 +276,7 @@ class JobService:
         planner_used: str,
         formats: list[str],
         render: bool,
+        extra_json_artifacts: dict[str, object] | None = None,
     ) -> JobManifest:
         job_id, job_dir = self.storage.create()
         created_at = datetime.now(UTC).isoformat()
@@ -94,6 +292,10 @@ class JobService:
         )
         self.storage.write_text(job_dir / "model.py", self.compiler.compile(spec))
         self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
+        for filename, payload in (extra_json_artifacts or {}).items():
+            if filename not in {"image-analysis.json", "feature-tree.json"}:
+                raise ValueError("Unsupported internal JSON artifact")
+            self.storage.write_json(job_dir / filename, payload)
         self.preview.write(spec, job_dir / "preview.svg")
         if "pdf" in formats and validation.valid:
             self.drawing.write(spec, job_dir / "drawing.pdf")

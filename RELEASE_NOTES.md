@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.2.0 — 2026-07-31
+
+第三階段校準圖片／草圖轉 CAD：
+
+- 正俯視 PNG/JPEG 安全解碼、EXIF orientation 正規化與 bytes／像素／尺寸／timeout／併發限制。
+- 已知最長邊毫米校準、旋轉矩形外框與圓孔擷取、信心分數及 SHA-256 provenance。
+- 有型別且可編輯的 Feature Tree：rectangle sketch、extrude、circle sketch、through cut。
+- Web 圖片上傳、Feature Tree 編輯與人工確認輸出。
+- REST `/image-analysis`、`/image-feature-tree-to-spec` 與 `/generate-from-image-feature-tree`。
+- CLI `promptcad image`，支援分析 JSON、`--feature-tree-input` 編輯回送與 `--confirm` 全格式生成。
+- 非矩形與不完整 Feature Tree 會停止自動 CAD 轉換。
+- 前置 multipart body 限制、固定分析 worker capacity、來源 HMAC 驗證與預設 loopback 部署。
+- OpenCV headless、Pillow、multipart 依賴鎖定及 Docker／Conda runtime 同步。
+- 59 項測試、79% app 覆蓋率、無已知 Python 相依漏洞。
+- 真實驗收：校準 PNG 產出一個 100×60×5 mm STEP 實體及四個孔。
+
 ## v0.1.0 — 2026-07-30
 
 首個可執行 Prompt-to-CAD MVP：

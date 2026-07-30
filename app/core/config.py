@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     render_timeout_seconds: int = Field(default=120, ge=5, le=1800)
     max_prompt_chars: int = Field(default=4000, ge=100, le=20000)
     max_jobs_returned: int = Field(default=50, ge=1, le=500)
+    max_image_bytes: int = Field(default=10_000_000, ge=100_000, le=50_000_000)
+    max_image_pixels: int = Field(default=12_000_000, ge=100_000, le=40_000_000)
+    max_image_dimension: int = Field(default=4096, ge=256, le=8192)
+    image_analysis_timeout_seconds: int = Field(default=20, ge=2, le=120)
+    image_analysis_concurrency: int = Field(default=2, ge=1, le=8)
 
     api_token: str | None = None
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000"

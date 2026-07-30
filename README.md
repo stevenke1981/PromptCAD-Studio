@@ -5,6 +5,8 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 ```text
 提示詞
   → 標準件 CAD Agent／本地規則／OpenAI-compatible LLM 規劃器
+圖片／草圖
+  → 安全解碼／已知長度校準／輪廓與圓孔擷取／可編輯 Feature Tree
   → 受控 CadDocument 1.0 DSL
   → 幾何與製造前驗證
   → CadQuery／OpenSCAD 編譯器
@@ -17,6 +19,7 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 
 - 中文／英文提示詞本地解析，沒有 API Key 也能使用。
 - 標準件 CAD Agent：辨識 NEMA17 並帶入有來源、可覆寫的馬達面尺寸與支架參數。
+- 校準圖片轉 CAD：正俯視 PNG/JPEG 擷取矩形外框與圓孔，產生信心分數、可編輯 Feature Tree、CAD DSL 與完整工程輸出。
 - OpenAI-compatible LLM 規劃器，支援 `json_schema`、`json_object` 與純提示 JSON 模式。
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
 - 基礎幾何：板件、圓柱、圓環、L 型支架、開口外殼。
@@ -107,6 +110,33 @@ promptcad generate "NEMA17 馬達支架，板厚5mm，支架寬70mm" --planner a
 
 `auto` 也會自動辨識 NEMA17。Agent 從版本化標準件目錄載入 42.3 mm 馬達面、31 mm 安裝孔距、4×M3、Ø22 定位凸台與 Ø5 軸徑，並在輸出 DSL 的 `standards` 保存來源。板厚、支架寬度、底板深度與立板高度可由提示詞覆寫。
 
+### 圖片／草圖轉 CAD
+
+Web UI 可上傳高對比、單一零件的正俯視 PNG/JPEG，輸入外框最長邊實際尺寸與厚度後，系統會：
+
+1. 移除 EXIF 方向差異並限制壓縮大小、像素及影像尺寸。
+2. 偵測矩形外框與圓孔，記錄校準端點、`mm_per_pixel`、信心及影像雜湊。
+3. 產生可編輯 Feature Tree；人工確認後才轉入既有驗證與 CAD renderer。
+4. 非矩形、低信心或無法安全解釋的影像只回傳候選與警告，不會直接建立製造輸出。
+
+CLI：
+
+```powershell
+promptcad image examples/image-to-cad/plate-top-view.png `
+  --known-length 100 --thickness 5 `
+  --analysis-output examples/generated/image-to-cad/image-analysis.json
+
+# 編輯 image-analysis.json 內的 feature_tree 後，再以同一張原圖確認輸出
+promptcad image examples/image-to-cad/plate-top-view.png `
+  --known-length 100 --thickness 5 `
+  --feature-tree-input examples/generated/image-to-cad/image-analysis.json `
+  --confirm
+```
+
+CLI 會重新分析原圖並比對 SHA-256；只有來源相符的已編輯 Feature Tree 才能輸出。最終工作包會保存校準 provenance、確認後的 Feature Tree、DSL、驗證與 CAD 產物。
+
+完整驗收範例位於 [`examples/generated/image-to-cad`](examples/generated/image-to-cad)。
+
 ### Web 編輯流程
 
 1. 輸入「長 120、寬 60、厚 10，四角 M6 通孔，R5」。
@@ -123,6 +153,7 @@ promptcad generate "畫一個可固定 NEMA17 馬達的支架" --planner agent
 promptcad validate examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/enclosure-side-cutout/spec.json
+promptcad image examples/image-to-cad/plate-top-view.png --known-length 100 --thickness 5
 promptcad doctor
 ```
 
@@ -217,6 +248,8 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 |---|---|
 | `spec.json` | 可編輯、可版本控制的 CAD DSL |
 | `validation.json` | errors、warnings、info 與 review 狀態 |
+| `image-analysis.json` | 圖片尺寸、校準、偵測結果與已驗證來源 |
+| `feature-tree.json` | 人工確認後、實際用於生成 CAD 的 Feature Tree |
 | `model.py` | 可獨立執行的 CadQuery 模型 |
 | `model.scad` | OpenSCAD fallback 模型 |
 | `preview.svg` | 不依賴 CAD 核心的快速工程預覽 |
@@ -234,6 +267,7 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 3. 規則解析器偏向常見單一零件、單一孔群與單一矩形側面開口；複雜多段輪廓、多孔群、裝配與自由曲面應使用 LLM 規劃器或直接編輯 DSL。
 4. `preview.svg` 是快速預覽，不是 CAD kernel 的 BREP 渲染結果。
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
+6. 圖片 MVP 僅支援校準後的高對比正俯視矩形板與圓孔；厚度必須輸入。透視、反光、遮擋、任意輪廓與多零件照片會停止自動轉換。
 
 ## 測試與品質檢查
 
@@ -245,7 +279,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前測試涵蓋規則解析、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、驗證閘門、可編輯 DSL、API Token、檔案下載與 ZIP。
+目前測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼、校準、輪廓／圓孔擷取、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP。
 
 ## 專案結構
 
@@ -256,6 +290,7 @@ app/
   models/              CadDocument DSL 與 API 模型
   services/
     planners/          本地規則與 OpenAI-compatible LLM
+    image_analysis.py  校準影像、特徵擷取與 Feature Tree 轉換
     compiler.py        CadQuery 確定性編譯器
     openscad.py        OpenSCAD 編譯器
     renderer.py        CAD 核心選擇與受限 subprocess

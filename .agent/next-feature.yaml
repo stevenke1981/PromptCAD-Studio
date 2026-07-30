@@ -1,12 +1,12 @@
-evaluated_at: 2026-07-30
+evaluated_at: 2026-07-31
 autonomy: recommend_only
-selected: Calibrated image and hand-sketch to 2D feature extraction
+selected: Restricted DXF closed-profile and circular-hole to 3D extrusion
 evidence:
-  - The owner defined image-to-CAD as phase three.
-  - The NEMA17 standards-aware phase-two vertical slice is now accepted.
+  - The owner defined 2D engineering drawing to 3D as phase four.
+  - The calibrated raster image-to-Feature-Tree phase-three slice is accepted.
 scope_candidate:
-  - Image upload with explicit scale calibration
-  - Line, circle, and closed-profile extraction
-  - Confidence-scored editable feature candidates
-  - Conversion to a constrained 2D CAD DSL
-reason_not_implemented: Phase three requires a separate bounded request and image acceptance fixtures; phase two is complete.
+  - Upload a bounded ASCII or binary DXF with units
+  - Extract one closed line and arc profile plus circular holes
+  - Produce an editable Feature Tree with an explicit extrusion thickness
+  - Reuse CadDocument validation and all CAD output formats
+reason_not_implemented: Phase four is a separate file-format and free-profile change that needs a new bounded request and DSL decision.

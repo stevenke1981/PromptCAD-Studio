@@ -1,0 +1,96 @@
+{
+  "analysis_version": "1.0",
+  "image_sha256": "91253cbd069f3c8ffce6bec270ffb63eee254045708e6a457f3677c8faed5a22",
+  "image_format": "PNG",
+  "image_width_px": 1000,
+  "image_height_px": 700,
+  "calibration": {
+    "mode": "known_long_edge",
+    "known_distance_mm": 100.0,
+    "point_a_px": {
+      "x": 100.0,
+      "y": 350.0
+    },
+    "point_b_px": {
+      "x": 900.0,
+      "y": 350.0
+    },
+    "pixel_distance": 800.0,
+    "mm_per_pixel": 0.125
+  },
+  "outer_profile": {
+    "shape": "rectangle",
+    "length_mm": 100.0,
+    "width_mm": 60.0,
+    "rotation_deg": -0.0,
+    "rectangularity": 0.9999947916666667,
+    "confidence": 0.9999947916666667
+  },
+  "circles": [
+    {
+      "id": "circle-01",
+      "center_px": {
+        "x": 260.0,
+        "y": 430.0
+      },
+      "center_mm": {
+        "x": -30.0,
+        "y": -10.0
+      },
+      "diameter_mm": 5.220659345761518,
+      "circularity": 0.9100767943889565,
+      "confidence": 0.9100767943889565
+    },
+    {
+      "id": "circle-02",
+      "center_px": {
+        "x": 260.0,
+        "y": 270.0
+      },
+      "center_mm": {
+        "x": -30.0,
+        "y": 10.0
+      },
+      "diameter_mm": 5.220659345761518,
+      "circularity": 0.9100767943889565,
+      "confidence": 0.9100767943889565
+    },
+    {
+      "id": "circle-03",
+      "center_px": {
+        "x": 740.0,
+        "y": 430.0
+      },
+      "center_mm": {
+        "x": 30.0,
+        "y": -10.0
+      },
+      "diameter_mm": 5.220659345761518,
+      "circularity": 0.9100767943889565,
+      "confidence": 0.9100767943889565
+    },
+    {
+      "id": "circle-04",
+      "center_px": {
+        "x": 740.0,
+        "y": 270.0
+      },
+      "center_mm": {
+        "x": 30.0,
+        "y": 10.0
+      },
+      "diameter_mm": 5.220659345761518,
+      "circularity": 0.9100767943889565,
+      "confidence": 0.9100767943889565
+    }
+  ],
+  "review_required": true,
+  "convertible": true,
+  "warnings": [
+    "比例由外框最長邊校準；不使用圖片 DPI 或 EXIF 尺寸。",
+    "厚度由使用者指定，無法從單張俯視圖可靠推定。",
+    "影像結果預設需要人工確認；透視、遮擋或反光照片不應直接製造。"
+  ],
+  "feature_tree_file": "feature-tree.json",
+  "provenance_verification": "verified-before-generation"
+}

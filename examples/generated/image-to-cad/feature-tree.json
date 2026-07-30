@@ -1,0 +1,101 @@
+[
+  {
+    "id": "profile-01",
+    "operation": "sketch_rectangle",
+    "parent_id": null,
+    "parameters": {
+      "length_mm": 100.0,
+      "width_mm": 60.0
+    },
+    "confidence": 0.9999947916666667
+  },
+  {
+    "id": "extrude-01",
+    "operation": "extrude",
+    "parent_id": "profile-01",
+    "parameters": {
+      "distance_mm": 5.0
+    },
+    "confidence": 0.9999947916666667
+  },
+  {
+    "id": "sketch-circle-01",
+    "operation": "sketch_circle",
+    "parent_id": "profile-01",
+    "parameters": {
+      "x_mm": -30.0,
+      "y_mm": -10.0,
+      "diameter_mm": 5.220659345761518
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "cut-circle-01",
+    "operation": "cut_through",
+    "parent_id": "sketch-circle-01",
+    "parameters": {
+      "depth_mm": 5.0
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "sketch-circle-02",
+    "operation": "sketch_circle",
+    "parent_id": "profile-01",
+    "parameters": {
+      "x_mm": -30.0,
+      "y_mm": 10.0,
+      "diameter_mm": 5.220659345761518
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "cut-circle-02",
+    "operation": "cut_through",
+    "parent_id": "sketch-circle-02",
+    "parameters": {
+      "depth_mm": 5.0
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "sketch-circle-03",
+    "operation": "sketch_circle",
+    "parent_id": "profile-01",
+    "parameters": {
+      "x_mm": 30.0,
+      "y_mm": -10.0,
+      "diameter_mm": 5.220659345761518
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "cut-circle-03",
+    "operation": "cut_through",
+    "parent_id": "sketch-circle-03",
+    "parameters": {
+      "depth_mm": 5.0
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "sketch-circle-04",
+    "operation": "sketch_circle",
+    "parent_id": "profile-01",
+    "parameters": {
+      "x_mm": 30.0,
+      "y_mm": 10.0,
+      "diameter_mm": 5.220659345761518
+    },
+    "confidence": 0.9100767943889565
+  },
+  {
+    "id": "cut-circle-04",
+    "operation": "cut_through",
+    "parent_id": "sketch-circle-04",
+    "parameters": {
+      "depth_mm": 5.0
+    },
+    "confidence": 0.9100767943889565
+  }
+]

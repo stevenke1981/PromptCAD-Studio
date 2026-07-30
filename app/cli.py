@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.models.cad import CadDocument
+from app.models.image import ImageAnalysisResponse
 from app.services.job_service import JobService
 
 
@@ -32,6 +33,56 @@ def _render(args) -> int:
     service = JobService(get_settings())
     spec = CadDocument.model_validate_json(Path(args.spec).read_text(encoding="utf-8"))
     manifest = asyncio.run(service.generate_from_spec(spec, args.formats, not args.no_render))
+    print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
+    return 0 if manifest.status != "failed" else 1
+
+
+def _image(args) -> int:
+    service = JobService(get_settings())
+    image_path = Path(args.image)
+    if image_path.stat().st_size > service.settings.max_image_bytes:
+        print(
+            f"Image exceeds the {service.settings.max_image_bytes} byte limit",
+            file=sys.stderr,
+        )
+        return 2
+    with image_path.open("rb") as handle:
+        data = handle.read(service.settings.max_image_bytes + 1)
+    analysis = asyncio.run(
+        service.analyze_image(
+            data,
+            known_length_mm=args.known_length,
+            thickness_mm=args.thickness,
+        )
+    )
+    if args.analysis_output:
+        Path(args.analysis_output).write_text(
+            json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    if not args.confirm:
+        print(json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 0 if analysis.convertible else 2
+    if not analysis.convertible:
+        print(json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        return 2
+    feature_tree = analysis.feature_tree
+    if args.feature_tree_input:
+        edited = ImageAnalysisResponse.model_validate_json(
+            Path(args.feature_tree_input).read_text(encoding="utf-8")
+        )
+        if edited.image_sha256 != analysis.image_sha256:
+            print("Feature Tree input does not match the supplied image.", file=sys.stderr)
+            return 2
+        feature_tree = edited.feature_tree
+    manifest = asyncio.run(
+        service.generate_from_image_feature_tree(
+            analysis,
+            feature_tree,
+            formats=args.formats,
+            render=not args.no_render,
+        )
+    )
     print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
     return 0 if manifest.status != "failed" else 1
 
@@ -87,6 +138,40 @@ def build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument("--no-render", action="store_true")
     render.set_defaults(func=_render)
+
+    image = sub.add_parser(
+        "image",
+        help="Extract a calibrated top-view image into an editable feature tree",
+    )
+    image.add_argument("image")
+    image.add_argument(
+        "--known-length",
+        type=float,
+        required=True,
+        help="Known real length of the detected outer profile's longest edge in mm",
+    )
+    image.add_argument("--thickness", type=float, required=True, help="Part thickness in mm")
+    image.add_argument(
+        "--formats",
+        nargs="+",
+        default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+        choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+    )
+    image.add_argument(
+        "--confirm",
+        action="store_true",
+        help="Acknowledge review and generate CAD artifacts",
+    )
+    image.add_argument(
+        "--analysis-output",
+        help="Write the calibrated analysis and editable Feature Tree to a JSON file",
+    )
+    image.add_argument(
+        "--feature-tree-input",
+        help="Use an edited analysis JSON previously written by --analysis-output",
+    )
+    image.add_argument("--no-render", action="store_true")
+    image.set_defaults(func=_image)
 
     doctor = sub.add_parser("doctor", help="Check local CAD runtime")
     doctor.set_defaults(func=_doctor)

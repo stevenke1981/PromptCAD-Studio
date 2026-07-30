@@ -3,13 +3,16 @@ from __future__ import annotations
 import io
 import zipfile
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.security import require_api_token, safe_job_file, validate_job_id
 from app.models.api import (
     CapabilityResponse,
+    FeatureTreeToSpecRequest,
+    GenerateFromImageFeatureTreeRequest,
     GenerateFromSpecRequest,
     GenerateRequest,
     JobListItem,
@@ -18,6 +21,7 @@ from app.models.api import (
     PlanResponse,
 )
 from app.models.cad import CadDocument, ValidationReport
+from app.models.image import ImageAnalysisResponse
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_token)])
 
@@ -43,6 +47,8 @@ async def capabilities(request: Request):
         formats=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
         cadquery_available=service.renderer.cadquery_available(),
         openscad_available=service.renderer.openscad_available(),
+        image_analysis_available=True,
+        image_formats=["png", "jpeg"],
         configured_planner_mode=settings.planner_mode,
         configured_render_backend=settings.render_backend,
     )
@@ -71,6 +77,56 @@ async def generate_from_spec(request: Request, body: GenerateFromSpecRequest):
             body.spec,
             body.formats,
             body.render,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/image-analysis", response_model=ImageAnalysisResponse)
+async def image_analysis(
+    request: Request,
+    image: Annotated[UploadFile, File()],
+    known_length_mm: Annotated[float, Form(gt=0, le=100_000)],
+    thickness_mm: Annotated[float, Form(gt=0, le=100_000)],
+):
+    service = _service(request)
+    try:
+        return await service.analyze_upload(
+            image,
+            known_length_mm=known_length_mm,
+            thickness_mm=thickness_mm,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        await image.close()
+
+
+@router.post("/image-feature-tree-to-spec", response_model=PlanResponse)
+async def image_feature_tree_to_spec(
+    request: Request,
+    body: FeatureTreeToSpecRequest,
+):
+    try:
+        return _service(request).image_feature_tree_to_spec(
+            body.analysis,
+            body.feature_tree,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/generate-from-image-feature-tree", response_model=JobManifest)
+async def generate_from_image_feature_tree(
+    request: Request,
+    body: GenerateFromImageFeatureTreeRequest,
+):
+    try:
+        return await _service(request).generate_from_image_feature_tree(
+            body.analysis,
+            body.feature_tree,
+            formats=body.formats,
+            render=body.render,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

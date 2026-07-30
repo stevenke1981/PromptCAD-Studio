@@ -11,3 +11,7 @@ dependencies:
       - pydantic>=2.13,<3
       - pydantic-settings>=2.14,<3
       - httpx>=0.28,<1
+      - numpy>=2,<3
+      - opencv-python-headless>=4.12,<5
+      - pillow>=11,<13
+      - python-multipart>=0.0.20,<1

@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PromptCAD Studio</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="/assets/styles.css" />
 </head>
 <body>
@@ -51,6 +52,26 @@
       <button id="generate">產生 CAD</button>
       <p id="status" class="status">準備完成。</p>
 
+      <section class="image-import">
+        <div>
+          <div class="eyebrow">IMAGE → FEATURE TREE</div>
+          <h2>圖片／草圖轉 CAD</h2>
+        </div>
+        <p>支援高對比、單一零件的正俯視 PNG/JPEG。請提供外框最長邊實際尺寸與零件厚度。</p>
+        <label>選擇圖片
+          <input id="image-file" type="file" accept="image/png,image/jpeg" />
+        </label>
+        <div class="image-fields">
+          <label>外框最長邊（mm）
+            <input id="known-length" type="number" min="0.01" step="0.01" value="100" />
+          </label>
+          <label>零件厚度（mm）
+            <input id="image-thickness" type="number" min="0.01" step="0.01" value="5" />
+          </label>
+        </div>
+        <button id="analyze-image" class="secondary full" type="button">分析圖片並建立 Feature Tree</button>
+      </section>
+
       <div class="examples">
         <span>快速範例：</span>
         <button data-example="做一個墊圈，外徑30mm、內徑15mm、厚5mm。">墊圈</button>
@@ -78,6 +99,11 @@
         <summary>可編輯 CAD DSL / JSON</summary>
         <textarea id="spec" class="spec-editor" rows="18" spellcheck="false">{}</textarea>
         <button id="regenerate" class="secondary full" type="button">套用 JSON 並重新輸出</button>
+      </details>
+      <details id="feature-tree-panel" hidden>
+        <summary>影像 Feature Tree</summary>
+        <textarea id="feature-tree" class="spec-editor" rows="16" spellcheck="false">[]</textarea>
+        <button id="generate-feature-tree" class="secondary full" type="button">確認 Feature Tree 並輸出 CAD</button>
       </details>
     </section>
   </main>

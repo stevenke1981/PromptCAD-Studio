@@ -1,0 +1,24 @@
+{
+  "valid": true,
+  "review_required": true,
+  "issues": [
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "比例由外框最長邊校準；不使用圖片 DPI 或 EXIF 尺寸。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "厚度由使用者指定，無法從單張俯視圖可靠推定。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "影像結果需要人工確認；透視、遮擋或反光照片不應直接製造。",
+      "feature_index": null
+    }
+  ]
+}

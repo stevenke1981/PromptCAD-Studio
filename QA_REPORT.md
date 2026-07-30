@@ -1,20 +1,21 @@
-# QA Report — PromptCAD Studio v0.1.0
+# QA Report — PromptCAD Studio v0.2.0
 
-驗證日期：2026-07-30（Asia/Taipei）
+驗證日期：2026-07-31（Asia/Taipei）
 
 ## 通過項目
 
-- `pytest -q`：42/42 通過。
-- 測試覆蓋率：`app` 78%。
+- `pytest --cov=app`：59/59 通過。
+- 測試覆蓋率：`app` 79%。
 - `uv sync --frozen --extra dev`：Python 3.12.13 鎖定環境同步通過。
 - `ruff check .`：通過。
 - `python -m compileall -q app scripts tests examples/generated/plate-four-holes/model.py`：通過。
+- `promptcad image ... --confirm`：校準 PNG 產生全部 CAD 格式並完成 STEP 回讀。
 - `node --check app/static/app.js`：通過。
 - `docker-compose.yml`、`environment.yml`、`environment.runtime.yml` YAML 解析：通過。
 - 完整範例 `spec.json` 驗證：通過。
 - source-only 提示詞 → DSL → 驗證 → 原始碼 → 預覽端到端 smoke：通過。
 - 常見私鑰／API Key 模式掃描：未發現憑證。
-- `pip-audit`：本輪兩次連線 PyPI 均於 TLS handshake 逾時，未能刷新漏洞資料；前一輪稽核未發現已知漏洞。
+- `pip-audit`：無已知漏洞。
 - Editable package 安裝與 `promptcad --help`：通過。
 - 內建瀏覽器實際操作提示詞生成：預覽、source-only 狀態、6 個下載入口及最近工作均正確，瀏覽器 console 無錯誤。
 - CadQuery 2.8.0 實際產生 ESP32 螢幕外殼 STEP／STL／DXF／SVG，STEP 回讀為單一實體，外形 94 × 58 × 22 mm，含 4 個圓柱孔面。
@@ -24,6 +25,7 @@
 - 第一階段固定座提示詞：120 × 60 × 30 mm、兩個置中 Ø6.6 mm M6 間隙孔、R5 與全部八種輸出格式通過。
 - 第二階段 NEMA17 Agent：`auto` 自動路由、2 筆來源 provenance、4×M3 馬達孔、Ø22.5 中心孔、4×M4 底板孔及參數覆寫通過；STEP 回讀為單一 60 × 50 × 53 mm 實體。
 - 多代理稽核後補強：無空格中文辨識、cm/in 單位轉換、標準幾何偏離阻擋、PDF 馬達面孔投影與 Web 來源／假設顯示。
+- Phase 3 對抗測試：multipart 前置 413、像素載入前尺寸阻擋、JPEG 解碼、透視梯形拒絕、分析 provenance 防竄改、圖片工作包可追溯性。
 
 ## 測試涵蓋
 

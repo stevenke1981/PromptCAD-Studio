@@ -1,0 +1,217 @@
+{
+  "job_id": "87e608c0e7334b889bab72c4eb9e7864",
+  "status": "completed",
+  "created_at": "2026-07-30T18:05:02.367382+00:00",
+  "prompt": "由可編輯影像 Feature Tree 建立矩形板與圓孔",
+  "planner_used": "image-feature-tree",
+  "renderer_used": "cadquery",
+  "requested_formats": [
+    "step",
+    "stl",
+    "dxf",
+    "svg",
+    "pdf",
+    "py",
+    "scad",
+    "json"
+  ],
+  "spec": {
+    "schema_version": "1.0",
+    "name": "image-extracted-plate",
+    "source_prompt": "由可編輯影像 Feature Tree 建立矩形板與圓孔",
+    "unit": "mm",
+    "material": null,
+    "base": {
+      "kind": "plate",
+      "length": 100.0,
+      "width": 60.0,
+      "thickness": 5.0
+    },
+    "holes": [
+      {
+        "kind": "hole",
+        "x": -30.0,
+        "y": -10.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.220659345761518,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": -30.0,
+        "y": 10.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.220659345761518,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": 30.0,
+        "y": -10.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.220659345761518,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": 30.0,
+        "y": 10.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.220659345761518,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      }
+    ],
+    "cutouts": [],
+    "fillets": [],
+    "chamfers": [],
+    "standards": [],
+    "assumptions": [
+      "比例由外框最長邊校準；不使用圖片 DPI 或 EXIF 尺寸。",
+      "厚度由使用者指定，無法從單張俯視圖可靠推定。",
+      "影像結果需要人工確認；透視、遮擋或反光照片不應直接製造。"
+    ],
+    "notes": [
+      "影像 SHA-256：91253cbd069f3c8ffce6bec270ffb63eee254045708e6a457f3677c8faed5a22",
+      "分析版本：1.0"
+    ],
+    "planner": {
+      "planner": "image-feature-tree",
+      "confidence": 0.9100767943889565,
+      "review_required": true
+    }
+  },
+  "validation": {
+    "valid": true,
+    "review_required": true,
+    "issues": [
+      {
+        "severity": "info",
+        "code": "assumption",
+        "message": "比例由外框最長邊校準；不使用圖片 DPI 或 EXIF 尺寸。",
+        "feature_index": null
+      },
+      {
+        "severity": "info",
+        "code": "assumption",
+        "message": "厚度由使用者指定，無法從單張俯視圖可靠推定。",
+        "feature_index": null
+      },
+      {
+        "severity": "info",
+        "code": "assumption",
+        "message": "影像結果需要人工確認；透視、遮擋或反光照片不應直接製造。",
+        "feature_index": null
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "filename": "drawing.pdf",
+      "media_type": "application/pdf",
+      "size": 3137,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/drawing.pdf"
+    },
+    {
+      "filename": "feature-tree.json",
+      "media_type": "application/json",
+      "size": 2245,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/feature-tree.json"
+    },
+    {
+      "filename": "image-analysis.json",
+      "media_type": "application/json",
+      "size": 2381,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/image-analysis.json"
+    },
+    {
+      "filename": "model.dxf",
+      "media_type": "application/octet-stream",
+      "size": 20458,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.dxf"
+    },
+    {
+      "filename": "model.py",
+      "media_type": "text/x-python",
+      "size": 4732,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.py"
+    },
+    {
+      "filename": "model.scad",
+      "media_type": "application/octet-stream",
+      "size": 472,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.scad"
+    },
+    {
+      "filename": "model.step",
+      "media_type": "application/octet-stream",
+      "size": 30284,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.step"
+    },
+    {
+      "filename": "model.stl",
+      "media_type": "application/octet-stream",
+      "size": 102284,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.stl"
+    },
+    {
+      "filename": "model.svg",
+      "media_type": "image/svg+xml",
+      "size": 42966,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/model.svg"
+    },
+    {
+      "filename": "preview.svg",
+      "media_type": "image/svg+xml",
+      "size": 3618,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/preview.svg"
+    },
+    {
+      "filename": "render-warnings.json",
+      "media_type": "application/json",
+      "size": 2,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/render-warnings.json"
+    },
+    {
+      "filename": "spec.json",
+      "media_type": "application/json",
+      "size": 2389,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/spec.json"
+    },
+    {
+      "filename": "validation.json",
+      "media_type": "application/json",
+      "size": 656,
+      "url": "/api/v1/jobs/87e608c0e7334b889bab72c4eb9e7864/files/validation.json"
+    }
+  ],
+  "warnings": [],
+  "error": null
+}

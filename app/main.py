@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api.routes import router
 from app.core.config import Settings, get_settings
+from app.core.request_limits import RequestBodyLimitMiddleware
 from app.services.job_service import JobService
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -32,6 +33,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.jobs = JobService(settings)
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        path="/api/v1/image-analysis",
+        max_body_bytes=settings.max_image_bytes + 131_072,
+        max_concurrency=settings.image_analysis_concurrency,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

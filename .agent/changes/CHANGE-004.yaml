@@ -1,0 +1,18 @@
+id: CHANGE-004
+type: feature
+risk: medium
+objective: Complete phase three with a calibrated image-to-CAD vertical slice.
+scope:
+  - Bounded PNG and JPEG upload plus EXIF orientation normalization
+  - Known-long-edge calibration with pixel endpoints and metric provenance
+  - Deterministic rectangle and circular-hole extraction with confidence
+  - Typed editable Feature Tree and guarded conversion to CadDocument 1.0
+  - Web, REST, and CLI workflows with explicit review before CAD rendering
+  - Signed analysis provenance and self-contained image-analysis/Feature Tree job artifacts
+  - Pre-multipart body limiting and fixed-capacity native analysis workers
+  - STEP, STL, DXF, SVG, PDF, Python, SCAD, and JSON acceptance outputs
+protected_behavior:
+  - Prompt, manual DSL, and NEMA17 planner flows remain unchanged
+  - Invalid geometry never reaches a CAD renderer
+  - Raw uploaded images and untrusted filenames are never stored as job artifacts
+status: accepted

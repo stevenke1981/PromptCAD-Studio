@@ -1,0 +1,52 @@
+change_id: CHANGE-004
+status: passed
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 59 passed
+  coverage: 79 percent
+  dependency_audit: no known vulnerabilities
+  input:
+    format: PNG
+    pixels: [1000, 700]
+    known_long_edge_mm: 100
+    thickness_mm: 5
+  extraction:
+    profile_mm: [100, 60]
+    holes: 4
+    hole_centers_mm:
+      - [-30, -10]
+      - [-30, 10]
+      - [30, -10]
+      - [30, 10]
+    feature_tree_nodes: 10
+    review_required: true
+  cadquery: completed
+  web_acceptance:
+    status: PASS
+    flow: upload image -> inspect Feature Tree -> confirm -> CAD downloads
+    visible_status: "completed / cadquery"
+    console_errors: 0
+    screenshot: examples/generated/image-to-cad/web-acceptance.png
+  step:
+    solids: 1
+    size_mm: [100, 60, 5]
+    cylindrical_faces: 4
+  safety:
+    - request-body limit and concurrency admission occur before multipart parsing
+    - bounded bytes, dimensions, and total pixels before full decode
+    - timed-out native analysis retains fixed worker capacity until completion
+    - magic format decode rather than filename or MIME trust
+    - raw upload and filename are not stored
+    - non-rectangular and perspective-trapezoid profiles do not convert to CAD
+    - incomplete or non-finite Feature Trees are rejected
+    - HMAC-bound analysis provenance is verified before Feature Tree conversion
+    - PNG and JPEG decode paths are covered
+  provenance:
+    planner_used: image-feature-tree
+    artifacts:
+      - image-analysis.json
+      - feature-tree.json

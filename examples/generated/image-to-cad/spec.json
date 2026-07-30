@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "name": "image-extracted-plate",
+  "source_prompt": "由可編輯影像 Feature Tree 建立矩形板與圓孔",
+  "unit": "mm",
+  "material": null,
+  "base": {
+    "kind": "plate",
+    "length": 100.0,
+    "width": 60.0,
+    "thickness": 5.0
+  },
+  "holes": [
+    {
+      "kind": "hole",
+      "x": -30.0,
+      "y": -10.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 5.220659345761518,
+      "hole_type": "through",
+      "depth": null,
+      "thread": null,
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": -30.0,
+      "y": 10.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 5.220659345761518,
+      "hole_type": "through",
+      "depth": null,
+      "thread": null,
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 30.0,
+      "y": -10.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 5.220659345761518,
+      "hole_type": "through",
+      "depth": null,
+      "thread": null,
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 30.0,
+      "y": 10.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 5.220659345761518,
+      "hole_type": "through",
+      "depth": null,
+      "thread": null,
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    }
+  ],
+  "cutouts": [],
+  "fillets": [],
+  "chamfers": [],
+  "standards": [],
+  "assumptions": [
+    "比例由外框最長邊校準；不使用圖片 DPI 或 EXIF 尺寸。",
+    "厚度由使用者指定，無法從單張俯視圖可靠推定。",
+    "影像結果需要人工確認；透視、遮擋或反光照片不應直接製造。"
+  ],
+  "notes": [
+    "影像 SHA-256：91253cbd069f3c8ffce6bec270ffb63eee254045708e6a457f3677c8faed5a22",
+    "分析版本：1.0"
+  ],
+  "planner": {
+    "planner": "image-feature-tree",
+    "confidence": 0.9100767943889565,
+    "review_required": true
+  }
+}

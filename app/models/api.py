@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.cad import CadDocument, ValidationReport
+from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 
 OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 PlannerChoice = Literal["auto", "agent", "rule", "llm"]
@@ -34,6 +35,22 @@ class GenerateRequest(PlanRequest):
 
 class GenerateFromSpecRequest(StrictApiModel):
     spec: CadDocument
+    formats: list[OutputFormat] = Field(
+        default_factory=default_formats,
+        min_length=1,
+        max_length=8,
+    )
+    render: bool = True
+
+
+class FeatureTreeToSpecRequest(StrictApiModel):
+    analysis: ImageAnalysisResponse
+    feature_tree: list[FeatureTreeNode] = Field(min_length=2, max_length=130)
+
+
+class GenerateFromImageFeatureTreeRequest(StrictApiModel):
+    analysis: ImageAnalysisResponse
+    feature_tree: list[FeatureTreeNode] = Field(min_length=2, max_length=130)
     formats: list[OutputFormat] = Field(
         default_factory=default_formats,
         min_length=1,
@@ -87,5 +104,7 @@ class CapabilityResponse(StrictApiModel):
     formats: list[str]
     cadquery_available: bool
     openscad_available: bool
+    image_analysis_available: bool = True
+    image_formats: list[str] = Field(default_factory=lambda: ["png", "jpeg"])
     configured_planner_mode: str
     configured_render_backend: str

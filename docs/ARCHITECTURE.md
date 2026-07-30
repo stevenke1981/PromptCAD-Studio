@@ -6,8 +6,14 @@ Prompt
   ├─ RuleBasedPlanner
   └─ OpenAICompatiblePlanner
           ↓
-LLMIntent / normalized intent
-          ↓
+LLMIntent / normalized intent ───────────────┐
+                                             │
+Image (PNG/JPEG)
+  → bounded Pillow decode
+  → OpenCV rectangle/circle extraction
+  → calibrated ImageAnalysis 1.0
+  → editable Feature Tree ──────────────────┤
+                                             ↓
 CadDocument 1.0
 (Pydantic, extra=forbid, units=mm, bounded lists/numbers)
           ↓
@@ -28,6 +34,14 @@ Job manifest + downloadable artifacts
 - 透過 CLI `promptcad render spec.json` 重現。
 - 放入 Git 進行設計審查與差異比較。
 - 由不同 renderer 產生可比較的輸出。
+
+## Image-to-CAD ingestion
+
+圖片不進入 prompt planner，也不會產生或執行任意 Python。`ImageFeatureExtractor` 先以 Pillow 解碼及正規化 EXIF 方向，再把受限像素陣列交給 OpenCV。輸出是有型別、有限值、固定 operation 白名單的 Feature Tree；只有高信心矩形外框與圓孔能轉成 `CadDocument`。
+
+單一已知最長邊提供等比例校準，座標轉換後以外框中心作 CAD `(0, 0)`。厚度必須由使用者提供。所有影像結果預設 `review_required=true`，Web 和 CLI 都需要明確確認才進入 renderer。
+
+上傳資料不保存到工作目錄；原始檔名、MIME、DPI 與 EXIF 尺寸不作為幾何或路徑依據。
 
 ## 坐標系
 
