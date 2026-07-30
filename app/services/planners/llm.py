@@ -18,6 +18,8 @@ Choose exactly one supported template: plate, cylinder, ring, l_bracket, enclosu
 Use null for parameters that were not provided. Put every inferred/defaulted choice in assumptions.
 For M-thread holes: choose tapped only when the user explicitly asks for thread/tapping; otherwise choose clearance.
 Coordinates use the part center as XY origin and bottom as Z=0.
+Rectangular cutouts are supported on enclosure side faces positive_x, negative_x, positive_y, and negative_y.
+For side cutouts, width is horizontal on the selected face and height is vertical; x/y/z locate the center.
 Set review_required=true for ambiguity, inferred dimensions, unsafe geometry, or low confidence.
 If the request cannot be represented, choose the closest template, explain limitations in notes, and require review.
 """

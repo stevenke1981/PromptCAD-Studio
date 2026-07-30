@@ -19,7 +19,9 @@ from app.models.cad import (
     Material,
     PlannerMetadata,
     PlateBase,
+    RectangularCutoutFeature,
     RingBase,
+    SideFace,
     StrictModel,
 )
 from app.services.standards import (
@@ -40,6 +42,7 @@ class TemplateKind(StrEnum):
 class LayoutKind(StrEnum):
     CENTER = "center"
     LINE_X = "line_x"
+    CENTERED_LINE_X = "centered_line_x"
     FOUR_CORNERS = "four_corners"
     EXPLICIT = "explicit"
 
@@ -79,6 +82,15 @@ class IntentHole(StrictModel):
     countersink_angle: float | None
 
 
+class IntentCutout(StrictModel):
+    face: SideFace
+    x: float
+    y: float
+    z: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+
+
 class LLMIntent(StrictModel):
     name: str = Field(min_length=1, max_length=80)
     template: TemplateKind
@@ -86,6 +98,7 @@ class LLMIntent(StrictModel):
     material: Material | None
     parameters: IntentParameters
     holes: list[IntentHole] = Field(max_length=16)
+    cutouts: list[IntentCutout] = Field(max_length=32)
     fillet_radius: float | None
     chamfer_distance: float | None
     assumptions: list[str] = Field(max_length=32)
@@ -207,6 +220,15 @@ def _default_positions(
 
     if layout == LayoutKind.CENTER and count == 1:
         return [_point_on_axis_plane(axis, center_1, center_2)]
+    if layout == LayoutKind.CENTERED_LINE_X:
+        return [
+            _point_on_axis_plane(
+                axis,
+                round(center_1 + span_1 * ((index + 1) / (count + 1) - 0.5), 12),
+                center_2,
+            )
+            for index in range(count)
+        ]
     if layout == LayoutKind.FOUR_CORNERS:
         corners = [
             (center_1 - half_1, center_2 - half_2),
@@ -308,6 +330,17 @@ def intent_to_document(intent: LLMIntent, prompt: str, planner_name: str) -> Cad
     chamfers = []
     if intent.chamfer_distance and math.isfinite(intent.chamfer_distance):
         chamfers.append(ChamferFeature(distance=intent.chamfer_distance, selector=EdgeSelector.VERTICAL))
+    cutouts = [
+        RectangularCutoutFeature(
+            face=cutout.face,
+            x=cutout.x,
+            y=cutout.y,
+            z=cutout.z,
+            width=cutout.width,
+            height=cutout.height,
+        )
+        for cutout in intent.cutouts
+    ]
 
     review = intent.review_required or bool(assumptions) or intent.confidence < 0.8
     return CadDocument(
@@ -316,6 +349,7 @@ def intent_to_document(intent: LLMIntent, prompt: str, planner_name: str) -> Cad
         material=intent.material,
         base=base,
         holes=holes,
+        cutouts=cutouts,
         fillets=fillets,
         chamfers=chamfers,
         assumptions=assumptions,

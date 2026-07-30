@@ -32,6 +32,7 @@ class Renderer:
         return shutil.which("openscad") is not None
 
     def render(self, job_dir: Path, formats: list[str]) -> RenderResult:
+        job_dir = job_dir.resolve()
         requested = set(formats)
         backend = self._choose_backend()
         warnings: list[str] = []
@@ -149,7 +150,13 @@ class Renderer:
     @staticmethod
     def _existing_outputs(job_dir: Path, requested: set[str]) -> list[Path]:
         fixed = [job_dir / "spec.json", job_dir / "validation.json", job_dir / "model.py", job_dir / "model.scad", job_dir / "preview.svg"]
-        extension_map = {"step": "model.step", "stl": "model.stl", "dxf": "model.dxf", "svg": "model.svg"}
+        extension_map = {
+            "step": "model.step",
+            "stl": "model.stl",
+            "dxf": "model.dxf",
+            "svg": "model.svg",
+            "pdf": "drawing.pdf",
+        }
         for fmt, filename in extension_map.items():
             if fmt in requested:
                 fixed.append(job_dir / filename)

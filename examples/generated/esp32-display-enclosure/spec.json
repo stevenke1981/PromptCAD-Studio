@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "name": "esp32-2432s028r-display-enclosure",
+  "source_prompt": "建立 ESP32-2432S028R 2.8 吋觸控螢幕的開放式桌上外殼。模組外形 86 x 50 mm；外殼 94 x 58 x 22 mm、壁厚 2 mm；底部四個直徑 3.2 mm 安裝孔，孔中心距 70 x 34 mm。",
+  "unit": "mm",
+  "material": "plastic",
+  "base": {
+    "kind": "enclosure",
+    "length": 94.0,
+    "width": 58.0,
+    "height": 22.0,
+    "wall_thickness": 2.0
+  },
+  "holes": [
+    {
+      "kind": "hole",
+      "x": -35.0,
+      "y": -17.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 3.2,
+      "hole_type": "through",
+      "depth": null,
+      "thread": "M3",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 35.0,
+      "y": -17.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 3.2,
+      "hole_type": "through",
+      "depth": null,
+      "thread": "M3",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 35.0,
+      "y": 17.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 3.2,
+      "hole_type": "through",
+      "depth": null,
+      "thread": "M3",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": -35.0,
+      "y": 17.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 3.2,
+      "hole_type": "through",
+      "depth": null,
+      "thread": "M3",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    }
+  ],
+  "fillets": [],
+  "chamfers": [],
+  "assumptions": [
+    "以常見 ESP32-2432S028R 2.8 吋觸控模組 86 x 50 mm 為基準。",
+    "90 x 54 mm 內腔在模組四周各預留約 2 mm 裝配間隙。",
+    "四個 M3 間隙孔採 70 x 34 mm 孔中心距；列印前應與實際板版次核對。",
+    "採開放式上蓋設計，螢幕與觸控面板由上方完全露出。"
+  ],
+  "notes": [
+    "建議使用 M3 螺絲與 4 至 8 mm 隔離柱固定模組。",
+    "USB、TF 卡與按鍵開口會依不同板版次改變，應量測實板後再加入側面切口。",
+    "建議 FDM 材料使用 PETG 或 ABS，壁厚 2 mm，至少三道外牆。"
+  ],
+  "planner": {
+    "planner": "rule+manual-dsl",
+    "confidence": 0.9,
+    "review_required": true
+  }
+}

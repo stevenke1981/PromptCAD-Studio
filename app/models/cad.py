@@ -98,6 +98,13 @@ class Axis(StrEnum):
     Z = "z"
 
 
+class SideFace(StrEnum):
+    POSITIVE_X = "positive_x"
+    NEGATIVE_X = "negative_x"
+    POSITIVE_Y = "positive_y"
+    NEGATIVE_Y = "negative_y"
+
+
 class HoleFeature(StrictModel):
     kind: Literal["hole"] = "hole"
     x: float = Field(default=0, ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
@@ -128,6 +135,16 @@ class HoleFeature(StrictModel):
             if self.countersink_diameter <= self.diameter:
                 raise ValueError("countersink_diameter must exceed hole diameter")
         return self
+
+
+class RectangularCutoutFeature(StrictModel):
+    kind: Literal["rectangular_cutout"] = "rectangular_cutout"
+    face: SideFace
+    x: float = Field(default=0, ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
+    y: float = Field(default=0, ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
+    z: float = Field(default=0, ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
+    width: float = Field(gt=0, le=MAX_DIMENSION_MM)
+    height: float = Field(gt=0, le=MAX_DIMENSION_MM)
 
 
 class EdgeSelector(StrEnum):
@@ -163,6 +180,7 @@ class CadDocument(StrictModel):
     material: Material | None = None
     base: BaseFeature
     holes: list[HoleFeature] = Field(default_factory=list, max_length=64)
+    cutouts: list[RectangularCutoutFeature] = Field(default_factory=list, max_length=32)
     fillets: list[FilletFeature] = Field(default_factory=list, max_length=8)
     chamfers: list[ChamferFeature] = Field(default_factory=list, max_length=8)
     assumptions: list[str] = Field(default_factory=list, max_length=32)

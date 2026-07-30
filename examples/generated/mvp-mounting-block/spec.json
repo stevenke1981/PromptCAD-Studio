@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "name": "promptcad-plate",
+  "source_prompt": "幫我畫一個鋁合金固定座，長120，寬60，高30，中間兩個 M6 孔，四角 R5",
+  "unit": "mm",
+  "material": "aluminum",
+  "base": {
+    "kind": "plate",
+    "length": 120.0,
+    "width": 60.0,
+    "thickness": 30.0
+  },
+  "holes": [
+    {
+      "kind": "hole",
+      "x": -20.0,
+      "y": 0.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 20.0,
+      "y": 0.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    }
+  ],
+  "cutouts": [],
+  "fillets": [
+    {
+      "kind": "fillet",
+      "radius": 5.0,
+      "selector": "vertical"
+    }
+  ],
+  "chamfers": [],
+  "assumptions": [
+    "M6 未指定攻牙，依一般間隙孔近似"
+  ],
+  "notes": [],
+  "planner": {
+    "planner": "rule",
+    "confidence": 0.92,
+    "review_required": true
+  }
+}

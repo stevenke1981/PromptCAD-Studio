@@ -12,7 +12,9 @@ from app.models.cad import (
     HoleType,
     LBracketBase,
     PlateBase,
+    RectangularCutoutFeature,
     RingBase,
+    SideFace,
 )
 
 
@@ -42,6 +44,8 @@ class CadQueryCompiler:
         lines.extend(self._base_lines(doc))
         for index, hole in enumerate(doc.holes):
             lines.extend(self._hole_lines(index, hole, max_x, max_y, max_z))
+        for index, cutout in enumerate(doc.cutouts):
+            lines.extend(self._cutout_lines(doc, index, cutout, max_x, max_y))
         for index, fillet in enumerate(doc.fillets):
             selector = self._selector(fillet.selector)
             lines.extend(
@@ -134,6 +138,42 @@ class CadQueryCompiler:
                 "    result = outer.cut(inner)",
             ]
         raise TypeError(f"Unsupported base: {type(b)!r}")
+
+    @staticmethod
+    def _cutout_lines(
+        doc: CadDocument,
+        index: int,
+        cutout: RectangularCutoutFeature,
+        max_x: float,
+        max_y: float,
+    ) -> list[str]:
+        if isinstance(doc.base, EnclosureBase):
+            depth = doc.base.wall_thickness
+        elif cutout.face in {SideFace.POSITIVE_X, SideFace.NEGATIVE_X}:
+            depth = max_x * 2
+        else:
+            depth = max_y * 2
+
+        cutter_depth = depth + 0.4
+        if cutout.face == SideFace.POSITIVE_X:
+            dimensions = cutter_depth, cutout.width, cutout.height
+            center = max_x - depth / 2, cutout.y, cutout.z
+        elif cutout.face == SideFace.NEGATIVE_X:
+            dimensions = cutter_depth, cutout.width, cutout.height
+            center = -max_x + depth / 2, cutout.y, cutout.z
+        elif cutout.face == SideFace.POSITIVE_Y:
+            dimensions = cutout.width, cutter_depth, cutout.height
+            center = cutout.x, max_y - depth / 2, cutout.z
+        else:
+            dimensions = cutout.width, cutter_depth, cutout.height
+            center = cutout.x, -max_y + depth / 2, cutout.z
+
+        return [
+            f"    cutout_{index} = cq.Workplane('XY').box({_f(dimensions[0])}, "
+            f"{_f(dimensions[1])}, {_f(dimensions[2])}, centered=(True, True, True))"
+            f".translate(({_f(center[0])}, {_f(center[1])}, {_f(center[2])}))",
+            f"    result = result.cut(cutout_{index})",
+        ]
 
     def _hole_lines(self, index, hole, max_x, max_y, max_z) -> list[str]:
         origin, direction, distance = self._main_hole_cutter(hole, max_x, max_y, max_z)

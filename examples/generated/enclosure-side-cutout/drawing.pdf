@@ -1,0 +1,82 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 841.89 595.28] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1640 >>
+stream
+0.25 w
+0 G
+BT /F1 16 Tf 36.00 560.00 Td (PROMPTCAD ENGINEERING DRAWING) Tj ET
+BT /F1 8 Tf 36.00 542.00 Td (ORTHOGRAPHIC DRAFT - REVIEW DIMENSIONS BEFORE MANUFACTURING) Tj ET
+BT /F1 9 Tf 84.14 466.00 Td (TOP VIEW) Tj ET
+84.14 270.00 291.72 180.00 re S
+[3 2] 0 d
+90.34 276.21 279.31 167.59 re S
+[] 0 d
+285.86 443.79 43.45 6.21 re S
+84.14 248.00 m 375.86 248.00 l S
+84.14 244.00 m 84.14 252.00 l S
+375.86 244.00 m 375.86 252.00 l S
+BT /F1 8 Tf 219.00 254.00 Td (94 mm) Tj ET
+62.14 270.00 m 62.14 450.00 l S
+58.14 270.00 m 66.14 270.00 l S
+58.14 450.00 m 66.14 450.00 l S
+BT /F1 8 Tf 44.14 360.00 Td (58 mm) Tj ET
+BT /F1 9 Tf 70.00 208.45 Td (FRONT VIEW) Tj ET
+70.00 117.55 320.00 74.89 re S
+[3 2] 0 d
+76.81 124.36 m 383.19 124.36 l S
+76.81 124.36 m 76.81 192.45 l S
+383.19 124.36 m 383.19 192.45 l S
+[] 0 d
+291.28 134.57 47.66 27.23 re S
+291.28 134.57 m 338.94 161.81 l S
+291.28 161.81 m 338.94 134.57 l S
+48.00 117.55 m 48.00 192.45 l S
+44.00 117.55 m 52.00 117.55 l S
+44.00 192.45 m 52.00 192.45 l S
+BT /F1 8 Tf 30.00 155.00 Td (22 mm) Tj ET
+BT /F1 9 Tf 520.00 201.34 Td (RIGHT VIEW) Tj ET
+520.00 124.66 160.00 60.69 re S
+520.00 102.66 m 680.00 102.66 l S
+520.00 98.66 m 520.00 106.66 l S
+680.00 98.66 m 680.00 106.66 l S
+BT /F1 8 Tf 589.00 108.66 Td (58 mm) Tj ET
+510.00 34.00 296.00 64.00 re S
+510.00 56.00 m 806.00 56.00 l S
+510.00 77.00 m 806.00 77.00 l S
+BT /F1 9 Tf 518.00 82.00 Td (PART: promptcad-enclosure) Tj ET
+BT /F1 8 Tf 518.00 62.00 Td (MATERIAL: unspecified) Tj ET
+BT /F1 8 Tf 680.00 62.00 Td (UNITS: mm) Tj ET
+BT /F1 8 Tf 518.00 42.00 Td (SIZE: 94 x 58 x 22 mm) Tj ET
+BT /F1 8 Tf 680.00 42.00 Td (PROJECTION: 3RD ANGLE) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Title (promptcad-enclosure) /Creator (PromptCAD Studio) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000253 00000 n 
+0000001945 00000 n 
+0000002015 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+2093
+%%EOF

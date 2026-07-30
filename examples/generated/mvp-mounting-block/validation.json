@@ -1,0 +1,24 @@
+{
+  "valid": true,
+  "review_required": true,
+  "issues": [
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M6 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 0
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M6 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 1
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "M6 未指定攻牙，依一般間隙孔近似",
+      "feature_index": null
+    }
+  ]
+}

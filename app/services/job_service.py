@@ -9,6 +9,7 @@ from app.core.config import Settings
 from app.models.api import Artifact, JobListItem, JobManifest, PlanResponse
 from app.models.cad import CadDocument
 from app.services.compiler import CadQueryCompiler
+from app.services.drawing_pdf import EngineeringDrawingPdf
 from app.services.openscad import OpenScadCompiler
 from app.services.planners.factory import PlannerFactory
 from app.services.preview import SvgPreview
@@ -23,6 +24,7 @@ class JobService:
         self.planners = PlannerFactory(settings)
         self.validator = DesignValidator()
         self.compiler = CadQueryCompiler()
+        self.drawing = EngineeringDrawingPdf()
         self.openscad = OpenScadCompiler()
         self.preview = SvgPreview()
         self.storage = JobStorage(settings)
@@ -93,6 +95,8 @@ class JobService:
         self.storage.write_text(job_dir / "model.py", self.compiler.compile(spec))
         self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
         self.preview.write(spec, job_dir / "preview.svg")
+        if "pdf" in formats and validation.valid:
+            self.drawing.write(spec, job_dir / "drawing.pdf")
 
         if not validation.valid:
             status = "failed"

@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from app.models.cad import CadDocument, HoleFeature, PlannerMetadata, PlateBase
+from app.models.cad import (
+    CadDocument,
+    EnclosureBase,
+    HoleFeature,
+    PlannerMetadata,
+    PlateBase,
+    RectangularCutoutFeature,
+    SideFace,
+)
 from app.services.validator import DesignValidator
 
 
@@ -66,3 +74,49 @@ def test_counterbore_effective_diameter_respects_edge():
     )
     assert not report.valid
     assert any(issue.code == "hole_outside_part" for issue in report.issues)
+
+
+def test_enclosure_side_cutout_within_face_is_valid():
+    doc = CadDocument(
+        name="cutout",
+        source_prompt="cutout",
+        base=EnclosureBase(length=94, width=58, height=22, wall_thickness=2),
+        cutouts=[
+            RectangularCutoutFeature(
+                face=SideFace.POSITIVE_Y,
+                x=25,
+                z=9,
+                width=14,
+                height=8,
+            )
+        ],
+        planner=PlannerMetadata(planner="test"),
+    )
+
+    report = DesignValidator().validate(doc)
+
+    assert report.valid
+    assert not any(issue.code == "cutout_outside_face" for issue in report.issues)
+
+
+def test_enclosure_side_cutout_outside_face_is_error():
+    doc = CadDocument(
+        name="cutout",
+        source_prompt="cutout",
+        base=EnclosureBase(length=94, width=58, height=22, wall_thickness=2),
+        cutouts=[
+            RectangularCutoutFeature(
+                face=SideFace.POSITIVE_Y,
+                x=44,
+                z=20,
+                width=14,
+                height=8,
+            )
+        ],
+        planner=PlannerMetadata(planner="test"),
+    )
+
+    report = DesignValidator().validate(doc)
+
+    assert not report.valid
+    assert any(issue.code == "cutout_outside_face" for issue in report.issues)

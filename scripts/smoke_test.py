@@ -17,7 +17,7 @@ async def main():
     manifest = await service.generate(
         "鋁合金固定板，長120mm、寬60mm、厚10mm，四角M6通孔，R5",
         "rule",
-        ["step", "stl", "dxf", "svg", "py", "scad", "json"],
+        ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
         True,
     )
     print(manifest.model_dump_json(indent=2))

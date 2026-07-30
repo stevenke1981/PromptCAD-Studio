@@ -1,0 +1,16 @@
+id: CHANGE-002
+type: feature
+risk: low
+objective: Complete the first-phase Prompt-to-CAD MVP and preserve the ESP32 enclosure workflow.
+scope:
+  - Add rectangular side cutouts for open enclosures
+  - Add dependency-free orthographic drawing PDF output
+  - Correct centered multi-hole interpretation and disambiguate corner fillets from corner holes
+  - Add accepted CAD examples and roadmap documentation
+affected_modules:
+  - CAD DSL and planners
+  - Validator and previews
+  - CadQuery and OpenSCAD compilers
+  - CLI, REST API, and Web format selection
+rollback: Revert CHANGE-002 commit; CadDocument additions are backward-compatible.
+status: accepted

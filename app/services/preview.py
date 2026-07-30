@@ -10,6 +10,7 @@ from app.models.cad import (
     LBracketBase,
     PlateBase,
     RingBase,
+    SideFace,
 )
 
 
@@ -53,6 +54,27 @@ class SvgPreview:
             shapes.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{max(r,2):.2f}" class="cut"/>')
             shapes.append(f'<line x1="{x-8:.2f}" y1="{y:.2f}" x2="{x+8:.2f}" y2="{y:.2f}" class="center"/>')
             shapes.append(f'<line x1="{x:.2f}" y1="{y-8:.2f}" x2="{x:.2f}" y2="{y+8:.2f}" class="center"/>')
+
+        if isinstance(b, EnclosureBase):
+            wall = max(b.wall_thickness * scale, 4)
+            left = cx - dim_x * scale / 2
+            top = cy - dim_y * scale / 2
+            right = cx + dim_x * scale / 2
+            bottom = cy + dim_y * scale / 2
+            for cutout in doc.cutouts:
+                span = cutout.width * scale
+                if cutout.face == SideFace.POSITIVE_Y:
+                    rect = cx + cutout.x * scale - span / 2, top, span, wall
+                elif cutout.face == SideFace.NEGATIVE_Y:
+                    rect = cx + cutout.x * scale - span / 2, bottom - wall, span, wall
+                elif cutout.face == SideFace.POSITIVE_X:
+                    rect = right - wall, cy - cutout.y * scale - span / 2, wall, span
+                else:
+                    rect = left, cy - cutout.y * scale - span / 2, wall, span
+                shapes.append(
+                    f'<rect x="{rect[0]:.2f}" y="{rect[1]:.2f}" '
+                    f'width="{rect[2]:.2f}" height="{rect[3]:.2f}" class="cut"/>'
+                )
 
         dimensions = f"{dim_x:g} × {dim_y:g} mm"
         title = html.escape(doc.name)

@@ -12,6 +12,7 @@ from app.models.cad import (
     LBracketBase,
     PlateBase,
     RingBase,
+    SideFace,
     ValidationIssue,
     ValidationReport,
     ValidationSeverity,
@@ -23,6 +24,7 @@ class DesignValidator:
         issues: list[ValidationIssue] = []
         self._base_checks(doc, issues)
         self._hole_checks(doc, issues)
+        self._cutout_checks(doc, issues)
         self._edge_checks(doc, issues)
 
         for assumption in doc.assumptions:
@@ -283,6 +285,42 @@ class DesignValidator:
                         severity=ValidationSeverity.ERROR,
                         code="chamfer_too_large",
                         message=f"倒角 C{chamfer.distance:g} 大於所選邊可用尺寸的一半。",
+                        feature_index=index,
+                    )
+                )
+
+    @staticmethod
+    def _cutout_checks(doc: CadDocument, issues: list[ValidationIssue]) -> None:
+        for index, cutout in enumerate(doc.cutouts):
+            if not isinstance(doc.base, EnclosureBase):
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="cutout_requires_enclosure",
+                        message=f"矩形切口 {index + 1} 目前僅支援開放式外殼。",
+                        feature_index=index,
+                    )
+                )
+                continue
+
+            if cutout.face in {SideFace.POSITIVE_X, SideFace.NEGATIVE_X}:
+                horizontal_span = doc.base.width
+                horizontal_center = cutout.y
+            else:
+                horizontal_span = doc.base.length
+                horizontal_center = cutout.x
+
+            horizontal_clearance = (
+                horizontal_span / 2 - abs(horizontal_center) - cutout.width / 2
+            )
+            bottom_clearance = cutout.z - cutout.height / 2
+            top_clearance = doc.base.height - cutout.z - cutout.height / 2
+            if min(horizontal_clearance, bottom_clearance, top_clearance) < 0:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="cutout_outside_face",
+                        message=f"矩形切口 {index + 1} 超出 {cutout.face.value} 側面邊界。",
                         feature_index=index,
                     )
                 )

@@ -1,0 +1,37 @@
+id: BASELINE-20260730-002
+status: passed
+accepted_features:
+  - Natural-language planning to CadDocument 1.0
+  - Plate, cylinder, ring, L bracket, and open enclosure bases
+  - Hole, fillet, chamfer, and rectangular enclosure side-cutout features
+  - CadQuery STEP, STL, DXF, and SVG output
+  - OpenSCAD fallback
+  - Dependency-free A4 orthographic drawing PDF
+critical_user_flows:
+  - Chinese prompt to validated DSL and downloadable artifacts
+  - Edited DSL to regenerated artifacts
+  - Invalid geometry blocked before CAD kernel execution
+protected_behavior:
+  - Unknown DSL fields are rejected
+  - Generated code is deterministic and does not execute prompt text
+  - Source-only mode never fabricates CAD-kernel outputs
+public_interfaces:
+  - CadDocument schema_version 1.0
+  - REST API under /api/v1
+  - promptcad generate, validate, render, and doctor
+data_compatibility:
+  - Existing CadDocument 1.0 files without cutouts remain valid
+environment:
+  - Windows PowerShell
+  - Python 3.12.13
+  - CadQuery 2.8.0
+known_limitations:
+  - Drawing PDF is a dimensioned draft, not a complete manufacturing drawing
+  - Physical thread geometry is not generated
+  - Docker, OpenSCAD executable, and Conda paths were not run locally
+evidence:
+  - 34 pytest tests passed
+  - app coverage 77 percent
+  - Ruff, compileall, node check, and smoke test passed
+  - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
+  - Drawing PDF has one page and top, front, and right views

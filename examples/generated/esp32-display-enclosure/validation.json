@@ -1,0 +1,54 @@
+{
+  "valid": true,
+  "review_required": true,
+  "issues": [
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 0
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 1
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 2
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 3
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "以常見 ESP32-2432S028R 2.8 吋觸控模組 86 x 50 mm 為基準。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "90 x 54 mm 內腔在模組四周各預留約 2 mm 裝配間隙。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "四個 M3 間隙孔採 70 x 34 mm 孔中心距；列印前應與實際板版次核對。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "採開放式上蓋設計，螢幕與觸控面板由上方完全露出。",
+      "feature_index": null
+    }
+  ]
+}

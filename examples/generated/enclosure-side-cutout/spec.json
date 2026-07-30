@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "name": "promptcad-enclosure",
+  "source_prompt": "做一個94x58x22mm外殼，壁厚2mm，+Y面一個14x8mm矩形開口，中心x=25mm、z=9mm",
+  "unit": "mm",
+  "material": null,
+  "base": {
+    "kind": "enclosure",
+    "length": 94.0,
+    "width": 58.0,
+    "height": 22.0,
+    "wall_thickness": 2.0
+  },
+  "holes": [],
+  "cutouts": [
+    {
+      "kind": "rectangular_cutout",
+      "face": "positive_y",
+      "x": 25.0,
+      "y": 0.0,
+      "z": 9.0,
+      "width": 14.0,
+      "height": 8.0
+    }
+  ],
+  "fillets": [],
+  "chamfers": [],
+  "assumptions": [],
+  "notes": [],
+  "planner": {
+    "planner": "rule",
+    "confidence": 0.92,
+    "review_required": false
+  }
+}

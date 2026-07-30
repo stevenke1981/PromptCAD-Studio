@@ -40,7 +40,7 @@
 {
   "prompt": "長120寬60厚10的固定板，四角M6孔，R5",
   "planner": "auto",
-  "formats": ["step", "stl", "dxf", "svg", "py", "scad", "json"],
+  "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
   "render": true
 }
 ```
@@ -59,13 +59,14 @@
     "material": "aluminum",
     "base": {"kind": "plate", "length": 140, "width": 60, "thickness": 10},
     "holes": [],
+    "cutouts": [],
     "fillets": [],
     "chamfers": [],
     "assumptions": [],
     "notes": [],
     "planner": {"planner": "manual", "confidence": 1, "review_required": false}
   },
-  "formats": ["step", "stl", "dxf", "svg", "py", "scad", "json"],
+  "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
   "render": true
 }
 ```

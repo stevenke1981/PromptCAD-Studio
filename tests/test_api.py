@@ -7,13 +7,20 @@ def test_health(client):
     assert response.json()["status"] == "ok"
 
 
+def test_capabilities_advertise_rectangular_side_cutouts(client):
+    response = client.get("/api/v1/capabilities")
+
+    assert response.status_code == 200
+    assert "rectangular_cutout" in response.json()["feature_types"]
+
+
 def test_generate_source_only(client):
     response = client.post(
         "/api/v1/generate",
         json={
             "prompt": "長120mm寬60mm厚10mm固定板，四角M6通孔，R5",
             "planner": "rule",
-            "formats": ["step", "stl", "dxf", "svg", "py", "scad", "json"],
+            "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
             "render": True,
         },
     )
@@ -21,7 +28,14 @@ def test_generate_source_only(client):
     body = response.json()
     assert body["status"] == "source_only"
     names = {item["filename"] for item in body["artifacts"]}
-    assert {"spec.json", "validation.json", "model.py", "model.scad", "preview.svg"} <= names
+    assert {
+        "spec.json",
+        "validation.json",
+        "model.py",
+        "model.scad",
+        "preview.svg",
+        "drawing.pdf",
+    } <= names
     assert body["spec"]["base"]["kind"] == "plate"
 
     job = client.get(f"/api/v1/jobs/{body['job_id']}")

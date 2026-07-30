@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from app.models.cad import CadDocument, FilletFeature, HoleFeature, PlannerMetadata, PlateBase
+from app.models.cad import (
+    CadDocument,
+    EnclosureBase,
+    FilletFeature,
+    HoleFeature,
+    PlannerMetadata,
+    PlateBase,
+    RectangularCutoutFeature,
+    SideFace,
+)
 from app.services.compiler import CadQueryCompiler
 from app.services.openscad import OpenScadCompiler
 
@@ -89,3 +98,29 @@ def test_prompt_injection_text_remains_data_not_python():
         for node in ast.walk(tree)
     )
     compile(code, "safe-model.py", "exec")
+
+
+def test_enclosure_side_cutout_compiles_to_cadquery_and_openscad():
+    doc = CadDocument(
+        name="enclosure-cutout",
+        source_prompt="enclosure with a side cutout",
+        base=EnclosureBase(length=94, width=58, height=22, wall_thickness=2),
+        cutouts=[
+            RectangularCutoutFeature(
+                face=SideFace.POSITIVE_Y,
+                x=25,
+                z=9,
+                width=14,
+                height=8,
+            )
+        ],
+        planner=PlannerMetadata(planner="test"),
+    )
+
+    code = CadQueryCompiler().compile(doc)
+    assert "cutout_0 = cq.Workplane('XY').box(14, 2.4, 8" in code
+    assert ".translate((25, 28, 9))" in code
+    compile(code, "cutout-model.py", "exec")
+
+    scad = OpenScadCompiler().compile(doc)
+    assert "translate([18, 26.8, 5]) cube([14, 2.4, 8]);" in scad

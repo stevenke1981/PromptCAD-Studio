@@ -67,8 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate.add_argument(
         "--formats",
         nargs="+",
-        default=["step", "stl", "dxf", "svg", "py", "scad", "json"],
-        choices=["step", "stl", "dxf", "svg", "py", "scad", "json"],
+        default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+        choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     )
     generate.add_argument("--no-render", action="store_true")
     generate.set_defaults(func=_generate)
@@ -82,8 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--formats",
         nargs="+",
-        default=["step", "stl", "dxf", "svg", "py", "scad", "json"],
-        choices=["step", "stl", "dxf", "svg", "py", "scad", "json"],
+        default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+        choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     )
     render.add_argument("--no-render", action="store_true")
     render.set_defaults(func=_render)

@@ -6,12 +6,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.cad import CadDocument, ValidationReport
 
-OutputFormat = Literal["step", "stl", "dxf", "svg", "py", "scad", "json"]
+OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 PlannerChoice = Literal["auto", "rule", "llm"]
 
 
 def default_formats() -> list[OutputFormat]:
-    return ["step", "stl", "dxf", "svg", "py", "scad", "json"]
+    return ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 
 
 class StrictApiModel(BaseModel):
@@ -27,7 +27,7 @@ class GenerateRequest(PlanRequest):
     formats: list[OutputFormat] = Field(
         default_factory=default_formats,
         min_length=1,
-        max_length=7,
+        max_length=8,
     )
     render: bool = True
 
@@ -37,7 +37,7 @@ class GenerateFromSpecRequest(StrictApiModel):
     formats: list[OutputFormat] = Field(
         default_factory=default_formats,
         min_length=1,
-        max_length=7,
+        max_length=8,
     )
     render: bool = True
 
@@ -82,6 +82,7 @@ class JobListItem(StrictApiModel):
 class CapabilityResponse(StrictApiModel):
     planners: list[str]
     base_features: list[str]
+    feature_types: list[str]
     hole_types: list[str]
     formats: list[str]
     cadquery_available: bool

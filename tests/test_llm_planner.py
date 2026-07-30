@@ -29,6 +29,7 @@ def _intent_payload():
             "edge_margin": 10,
         },
         "holes": [],
+        "cutouts": [],
         "fillet_radius": 5,
         "chamfer_distance": None,
         "assumptions": [],

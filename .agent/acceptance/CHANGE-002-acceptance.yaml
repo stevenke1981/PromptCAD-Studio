@@ -1,0 +1,28 @@
+change_id: CHANGE-002
+status: passed
+build_or_launch: PASS
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 34 passed
+  coverage: 77 percent
+  lint: Ruff passed
+  compile: Python compileall and JavaScript node check passed
+  smoke: Prompt to complete artifacts passed
+  mounting_block:
+    size_mm: [120, 60, 30]
+    holes_mm:
+      - [-20, 0, 6.6]
+      - [20, 0, 6.6]
+    fillet_mm: 5
+    outputs: [STEP, STL, DXF, SVG, PDF, Python, SCAD, JSON]
+  side_cutout:
+    face: positive_y
+    opening_mm: [14, 8]
+    step_volume_mm3: 22520
+security_audit:
+  status: NOT_RUN
+  reason: PyPI TLS handshake timed out twice while refreshing pip-audit data.

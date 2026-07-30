@@ -13,6 +13,7 @@
   "material": "aluminum",
   "base": {"kind": "plate", "length": 100, "width": 60, "thickness": 8},
   "holes": [],
+  "cutouts": [],
   "fillets": [],
   "chamfers": [],
   "assumptions": [],
@@ -88,6 +89,24 @@
 
 可用 `axis`：`x`、`y`、`z`。盲孔與頭部特徵一律從該軸正向外表面向內建立。
 
+## Rectangular side cutout
+
+矩形側面開口目前適用於 `enclosure`：
+
+```json
+{
+  "kind": "rectangular_cutout",
+  "face": "positive_y",
+  "x": 25,
+  "y": 0,
+  "z": 9,
+  "width": 14,
+  "height": 8
+}
+```
+
+`face` 可用 `positive_x`、`negative_x`、`positive_y`、`negative_y`。`width` 是所選側面的水平方向尺寸，`height` 是 Z 軸垂直尺寸；`x`、`y`、`z` 表示開口中心。切口會自動貫穿外殼壁厚。
+
 ## Fillet / Chamfer
 
 ```json
@@ -109,4 +128,4 @@ promptcad render spec.json
 
 或 POST 到 `/api/v1/validate` 與 `/api/v1/generate-from-spec`。
 
-即使 schema 合法，孔仍可能落在零件外、與其他孔重疊或深度超過材料；這些由 DesignValidator 檢查，error 會阻止 renderer。
+即使 schema 合法，孔或側面開口仍可能落在零件外，孔也可能互相重疊或深度超過材料；這些由 DesignValidator 檢查，error 會阻止 renderer。

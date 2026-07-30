@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from app.models.cad import Axis, HoleType, Material
+from app.models.cad import Axis, HoleType, Material, SideFace
 from app.services.planners.base import CadPlanner
 from app.services.planners.intent import (
+    IntentCutout,
     IntentHole,
     IntentParameters,
     LayoutKind,
@@ -17,6 +18,7 @@ from app.services.planners.intent import (
 from app.services.standards import metric_clearance_diameter, metric_tap_drill_diameter
 
 _NUMBER = r"([0-9]+(?:\.[0-9]+)?)"
+_SIGNED_NUMBER = r"(-?[0-9]+(?:\.[0-9]+)?)"
 _UNIT = r"\s*(mm|毫米|cm|公分|厘米|m|公尺|in|inch|英吋|吋)?"
 
 _CN_COUNT = {"一": 1, "二": 2, "兩": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10}
@@ -150,6 +152,17 @@ def _first_measure(patterns: list[str], text: str) -> float | None:
     return None
 
 
+def _coordinate(text: str, axis: str) -> float | None:
+    match = re.search(
+        rf"(?:中心|center\s*)?{axis}\s*=\s*{_SIGNED_NUMBER}{_UNIT}",
+        text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    return float(match.group(1)) * _multiplier(match.group(2))
+
+
 def _hole_diameter(text: str) -> float | None:
     explicit = _labeled(text, ["孔徑", "孔径", "hole diameter"])
     if explicit is not None:
@@ -176,6 +189,46 @@ def _blind_hole_depth(text: str) -> float | None:
         rf"{_NUMBER}{_UNIT}\s+deep(?=.{{0,16}}blind\s+holes?|.{{0,16}}holes?)",
     ]
     return _first_measure(patterns, text)
+
+
+def _rectangular_cutout(text: str, params: IntentParameters) -> IntentCutout | None:
+    size_match = re.search(
+        rf"{_NUMBER}{_UNIT}\s*[xX*]\s*{_NUMBER}{_UNIT}\s*"
+        r"(?:的)?(?:矩形|長方形|长方形|rectangular)?\s*"
+        r"(?:開口|开口|切口|窗口|cutout|opening)",
+        text,
+        re.IGNORECASE,
+    )
+    if not size_match:
+        return None
+
+    groups = size_match.groups()
+    shared_unit = groups[1] or groups[3]
+    width = float(groups[0]) * _multiplier(groups[1] or shared_unit)
+    height = float(groups[2]) * _multiplier(groups[3] or shared_unit)
+    low = text.lower()
+
+    face = SideFace.POSITIVE_Y
+    face_tokens = (
+        (SideFace.POSITIVE_X, ["+x面", "正x面", "positive x", "right side", "右側", "右侧"]),
+        (SideFace.NEGATIVE_X, ["-x面", "負x面", "负x面", "negative x", "left side", "左側", "左侧"]),
+        (SideFace.POSITIVE_Y, ["+y面", "正y面", "positive y", "front side", "前側", "前侧"]),
+        (SideFace.NEGATIVE_Y, ["-y面", "負y面", "负y面", "negative y", "back side", "後側", "后侧"]),
+    )
+    for candidate, tokens in face_tokens:
+        if any(token in low for token in tokens):
+            face = candidate
+            break
+
+    center_z = _coordinate(text, "z")
+    return IntentCutout(
+        face=face,
+        x=_coordinate(text, "x") or 0,
+        y=_coordinate(text, "y") or 0,
+        z=center_z if center_z is not None else (params.height or 30) / 2,
+        width=width,
+        height=height,
+    )
 
 
 def _hole_group(text: str, params: IntentParameters) -> IntentHole | None:
@@ -206,11 +259,16 @@ def _hole_group(text: str, params: IntentParameters) -> IntentHole | None:
         hole_type = HoleType.COUNTERSINK
 
     layout = LayoutKind.LINE_X
-    if any(token in text.lower() for token in ["四角", "4角", "four corners", "each corner"]):
+    corner_holes = re.search(
+        r"(?:四角|4角|four corners|each corner).{0,24}(?:M\s*[0-9]+(?:\.[0-9]+)?|孔|holes?)",
+        text,
+        re.IGNORECASE,
+    )
+    if corner_holes:
         layout = LayoutKind.FOUR_CORNERS
         count = 4
     elif any(token in text.lower() for token in ["中心", "中間", "中央", "center", "centre"]):
-        layout = LayoutKind.CENTER if count == 1 else LayoutKind.LINE_X
+        layout = LayoutKind.CENTER if count == 1 else LayoutKind.CENTERED_LINE_X
 
     positions: list[Point3] = []
     coord_pattern = re.compile(
@@ -328,6 +386,10 @@ class RuleBasedPlanner(CadPlanner):
             holes.append(group)
 
         assumptions: list[str] = []
+        cutout = _rectangular_cutout(text, params)
+        cutouts = [cutout] if cutout else []
+        if cutout and _coordinate(text, "z") is None:
+            assumptions.append("矩形開口未指定中心高度，暫置於外殼高度中央")
         if group and group.thread and group.hole_type == HoleType.CLEARANCE:
             assumptions.append(f"{group.thread} 未指定攻牙，依一般間隙孔近似")
         if template == TemplateKind.L_BRACKET and group and not any(
@@ -353,6 +415,7 @@ class RuleBasedPlanner(CadPlanner):
             material=_material(text),
             parameters=params,
             holes=holes,
+            cutouts=cutouts,
             fillet_radius=_fillet(text),
             chamfer_distance=_chamfer(text),
             assumptions=assumptions,

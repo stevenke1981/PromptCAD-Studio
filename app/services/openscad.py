@@ -8,7 +8,9 @@ from app.models.cad import (
     EnclosureBase,
     LBracketBase,
     PlateBase,
+    RectangularCutoutFeature,
     RingBase,
+    SideFace,
 )
 
 
@@ -66,6 +68,8 @@ class OpenScadCompiler:
                         indent="    ",
                     )
                 )
+        for cutout in doc.cutouts:
+            lines.append(self._cutout_line(doc, cutout, max_x, max_y, indent="    "))
         lines.extend(["  }", "}", ""])
         if doc.fillets or doc.chamfers:
             lines.append("// Note: fillet/chamfer are preserved in model.py; OpenSCAD fallback does not apply them.")
@@ -92,6 +96,40 @@ class OpenScadCompiler:
             f"{indent}translate([{_f(origin[0])}, {_f(origin[1])}, {_f(origin[2])}]) "
             f"rotate([{rotation[0]}, {rotation[1]}, {rotation[2]}]) "
             f"cylinder(d1={_f(diameter_start)}, d2={_f(diameter_end)}, h={_f(height)});"
+        )
+
+    @staticmethod
+    def _cutout_line(
+        doc: CadDocument,
+        cutout: RectangularCutoutFeature,
+        max_x: float,
+        max_y: float,
+        indent: str,
+    ) -> str:
+        if isinstance(doc.base, EnclosureBase):
+            depth = doc.base.wall_thickness
+        elif cutout.face in {SideFace.POSITIVE_X, SideFace.NEGATIVE_X}:
+            depth = max_x * 2
+        else:
+            depth = max_y * 2
+
+        cutter_depth = depth + 0.4
+        if cutout.face == SideFace.POSITIVE_X:
+            origin = max_x - depth - 0.2, cutout.y - cutout.width / 2, cutout.z - cutout.height / 2
+            dimensions = cutter_depth, cutout.width, cutout.height
+        elif cutout.face == SideFace.NEGATIVE_X:
+            origin = -max_x - 0.2, cutout.y - cutout.width / 2, cutout.z - cutout.height / 2
+            dimensions = cutter_depth, cutout.width, cutout.height
+        elif cutout.face == SideFace.POSITIVE_Y:
+            origin = cutout.x - cutout.width / 2, max_y - depth - 0.2, cutout.z - cutout.height / 2
+            dimensions = cutout.width, cutter_depth, cutout.height
+        else:
+            origin = cutout.x - cutout.width / 2, -max_y - 0.2, cutout.z - cutout.height / 2
+            dimensions = cutout.width, cutter_depth, cutout.height
+
+        return (
+            f"{indent}translate([{_f(origin[0])}, {_f(origin[1])}, {_f(origin[2])}]) "
+            f"cube([{_f(dimensions[0])}, {_f(dimensions[1])}, {_f(dimensions[2])}]);"
         )
 
     @staticmethod

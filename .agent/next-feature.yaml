@@ -1,0 +1,12 @@
+evaluated_at: 2026-07-30
+autonomy: recommend_only
+selected: NEMA17 motor bracket standard-part vertical slice
+evidence:
+  - The owner defined standard-aware CAD Agent behavior as phase two.
+  - The first-phase Prompt-to-CAD MVP is now accepted.
+scope_candidate:
+  - Versioned NEMA17 dimensions and source provenance
+  - Overrideable motor, shaft, screw, hole-spacing, and bracket-thickness parameters
+  - Standard conflict and geometry validation
+  - STEP, STL, DXF, SVG, PDF, Python, SCAD, and JSON outputs
+reason_not_implemented: The current request has completed its bounded first-phase delivery and one next-feature extension.

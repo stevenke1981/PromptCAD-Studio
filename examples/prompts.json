@@ -4,6 +4,10 @@
     "prompt": "畫一個鋁合金固定板，長120mm、寬60mm、厚10mm，四角各一個 M6 通孔，孔中心離邊緣10mm，四角 R5。"
   },
   {
+    "name": "mvp-mounting-block",
+    "prompt": "幫我畫一個鋁合金固定座，長120，寬60，高30，中間兩個 M6 孔，四角 R5。"
+  },
+  {
     "name": "washer",
     "prompt": "做一個墊圈，外徑30mm、內徑15mm、厚5mm。"
   },
@@ -14,5 +18,9 @@
   {
     "name": "enclosure",
     "prompt": "做一個100x70x30mm的開口盒，壁厚2mm，底部四角3mm通孔。"
+  },
+  {
+    "name": "enclosure-side-cutout",
+    "prompt": "做一個94x58x22mm外殼，壁厚2mm，+Y面一個14x8mm矩形開口，中心x=25mm、z=9mm。"
   }
 ]

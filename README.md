@@ -8,7 +8,7 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
   → 受控 CadDocument 1.0 DSL
   → 幾何與製造前驗證
   → CadQuery／OpenSCAD 編譯器
-  → STEP、STL、DXF、SVG、Python、SCAD、JSON
+  → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
 ```
 
 目前版本是可直接執行的 MVP，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由確定性編譯器建立幾何。
@@ -20,9 +20,11 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
 - 基礎幾何：板件、圓柱、圓環、L 型支架、開口外殼。
 - 孔特徵：通孔、盲孔、間隙孔、攻牙底孔近似、沉孔、沉頭孔，以及 X／Y／Z 軸方向。
+- 外殼特徵：可在 ±X／±Y 側面建立矩形開口，適合 USB、TF 卡、按鍵與通風窗口。
 - 邊特徵：圓角與倒角。
+- 工程圖：不依賴 CAD kernel 的 A4 橫式三視圖 PDF，包含外形尺寸與標題欄。
 - 螺紋尺寸輔助：常見 M2～M12 一般間隙孔與攻牙底孔表；其他尺寸使用明確標示的比例近似。
-- 驗證閘門：孔超出輪廓、孔重疊、盲孔／沉孔深度、沉頭深度、圓環內孔、邊距、壁厚、圓角與倒角。
+- 驗證閘門：孔超出輪廓、孔重疊、側面開口越界、盲孔／沉孔深度、沉頭深度、圓環內孔、邊距、壁厚、圓角與倒角。
 - 無效設計會保存 DSL 與原始碼供修正，但**不會送入 CAD 核心渲染**。
 - Web UI、REST API、CLI、Docker Compose、Conda 環境、測試、CI 與完整範例。
 - 每次工作保存 manifest、DSL、驗證報告、CadQuery、OpenSCAD、預覽及實際輸出。
@@ -91,7 +93,7 @@ pytest
 uvicorn app.main:app --reload
 ```
 
-未安裝 CadQuery／OpenSCAD 時，系統進入 `source_only`：仍會產生 `spec.json`、`validation.json`、`model.py`、`model.scad` 與 `preview.svg`，但不會偽造 STEP／STL／DXF。
+未安裝 CadQuery／OpenSCAD 時，系統進入 `source_only`：仍會產生 `spec.json`、`validation.json`、`model.py`、`model.scad`、`preview.svg` 與 `drawing.pdf`，但不會偽造 STEP／STL／DXF。
 
 ## 使用方式
 
@@ -109,6 +111,7 @@ uvicorn app.main:app --reload
 promptcad generate "畫一個長120、寬60、厚10的固定板，四角M6孔，R5" --planner rule
 promptcad validate examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/plate-four-holes/spec.json
+promptcad render examples/generated/enclosure-side-cutout/spec.json
 promptcad doctor
 ```
 
@@ -128,7 +131,7 @@ curl -X POST http://localhost:8000/api/v1/generate \
   -d '{
     "prompt": "鋁合金固定座，長120mm、寬60mm、厚10mm，四角 M6 通孔，R5",
     "planner": "rule",
-    "formats": ["step", "stl", "dxf", "svg", "py", "scad", "json"],
+    "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     "render": true
   }'
 ```
@@ -192,6 +195,7 @@ Web UI 的 Token 欄位會連同預覽、單檔下載及 ZIP 下載一起使用�
 做一個 L 型支架，寬80、深50、高60、厚4，立板兩個 M5 孔。
 Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 做一個 100×70×30 mm 的開口盒，壁厚2mm，底部四角3mm通孔。
+做一個94x58x22mm外殼，壁厚2mm，+Y面一個14x8mm矩形開口，中心x=25mm、z=9mm。
 ```
 
 更穩定的寫法、軸向與孔位格式見 [`docs/PROMPT_GUIDE.md`](docs/PROMPT_GUIDE.md)。
@@ -205,6 +209,7 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 | `model.py` | 可獨立執行的 CadQuery 模型 |
 | `model.scad` | OpenSCAD fallback 模型 |
 | `preview.svg` | 不依賴 CAD 核心的快速工程預覽 |
+| `drawing.pdf` | A4 橫式三視圖工程草圖，不依賴 CAD 核心 |
 | `model.step` | 實體 CAD 交換檔，需要 CadQuery |
 | `model.stl` | 3D 列印網格，需要 CadQuery 或 OpenSCAD |
 | `model.dxf` | 水平截面 2D DXF，需要 CadQuery |
@@ -214,8 +219,8 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 ## 重要限制
 
 1. **M6、M8 等標示不等於完整實體螺紋。** 目前建立攻牙底孔／間隙孔的圓柱幾何，螺紋規格保留在 DSL 與驗證資訊中。
-2. DXF 是零件水平截面，不是含尺寸、公差、基準、表面處理與圖框的正式工程圖。
-3. 規則解析器偏向常見單一零件與單一孔群；複雜多段輪廓、多孔群、裝配與自由曲面應使用 LLM 規劃器或直接編輯 DSL。
+2. DXF 是零件水平截面；`drawing.pdf` 是含外形尺寸與標題欄的三視圖草圖，尚不含完整公差、基準、表面處理與製造註記。
+3. 規則解析器偏向常見單一零件、單一孔群與單一矩形側面開口；複雜多段輪廓、多孔群、裝配與自由曲面應使用 LLM 規劃器或直接編輯 DSL。
 4. `preview.svg` 是快速預覽，不是 CAD kernel 的 BREP 渲染結果。
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
 
@@ -229,7 +234,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前測試涵蓋規則解析、M 制孔徑、盲孔、沉頭孔、X/Y/Z 軸幾何原始碼、驗證閘門、可編輯 DSL、API Token、檔案下載與 ZIP。
+目前測試涵蓋規則解析、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、驗證閘門、可編輯 DSL、API Token、檔案下載與 ZIP。
 
 ## 專案結構
 
@@ -255,6 +260,7 @@ generated/             執行時工作目錄
 詳細資料：
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/CAD_DSL.md`](docs/CAD_DSL.md)
 - [`docs/API.md`](docs/API.md)
 - [`docs/SECURITY.md`](docs/SECURITY.md)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.models.cad import HoleType, PlateBase, RingBase
+from app.models.cad import HoleType, PlateBase, RingBase, SideFace
 from app.services.planners.rule_based import RuleBasedPlanner
 
 
@@ -90,3 +90,26 @@ def test_countersink_direct_diameter_is_preserved():
     assert all(hole.hole_type == HoleType.COUNTERSINK for hole in doc.holes)
     assert all(hole.diameter == 5 for hole in doc.holes)
     assert all(hole.countersink_diameter == 10 for hole in doc.holes)
+
+
+def test_chinese_enclosure_rectangular_side_cutout():
+    doc = plan("做一個94x58x22mm外殼，壁厚2mm，+Y面一個14x8mm矩形開口，中心x=25mm、z=9mm")
+
+    assert doc.base.kind == "enclosure"
+    assert len(doc.cutouts) == 1
+    cutout = doc.cutouts[0]
+    assert cutout.face == SideFace.POSITIVE_Y
+    assert (cutout.x, cutout.z) == (25, 9)
+    assert (cutout.width, cutout.height) == (14, 8)
+
+
+def test_first_phase_mounting_block_centers_two_m6_holes():
+    doc = plan("幫我畫一個鋁合金固定座，長120，寬60，高30，中間兩個 M6 孔，四角 R5")
+
+    assert isinstance(doc.base, PlateBase)
+    assert (doc.base.length, doc.base.width, doc.base.thickness) == (120, 60, 30)
+    assert doc.material.value == "aluminum"
+    assert len(doc.holes) == 2
+    assert {(hole.x, hole.y) for hole in doc.holes} == {(-20.0, 0.0), (20.0, 0.0)}
+    assert all(hole.diameter == 6.6 for hole in doc.holes)
+    assert doc.fillets[0].radius == 5

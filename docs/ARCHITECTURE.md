@@ -11,7 +11,7 @@ CadDocument 1.0
 (Pydantic, extra=forbid, units=mm, bounded lists/numbers)
           ↓
 DesignValidator
-  ├─ valid ───→ CadQueryCompiler + OpenScadCompiler → Renderer
+  ├─ valid ───→ EngineeringDrawingPdf + CadQueryCompiler + OpenScadCompiler → Renderer
   └─ invalid ─→ 保存 DSL／原始碼／預覽，但 validation-blocked
           ↓
 Job manifest + downloadable artifacts
@@ -69,6 +69,7 @@ validation.json
 model.py
 model.scad
 preview.svg
+drawing.pdf（不依賴 CAD kernel 的三視圖工程草圖）
 model.step / model.stl / model.dxf / model.svg（依環境與請求）
 render-warnings.json（CadQuery 執行時）
 manifest.json

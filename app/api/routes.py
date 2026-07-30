@@ -38,8 +38,9 @@ async def capabilities(request: Request):
     return CapabilityResponse(
         planners=["auto", "rule", "llm"],
         base_features=["plate", "cylinder", "ring", "l_bracket", "enclosure"],
+        feature_types=["hole", "rectangular_cutout", "fillet", "chamfer"],
         hole_types=["through", "blind", "clearance", "tapped", "counterbore", "countersink"],
-        formats=["step", "stl", "dxf", "svg", "py", "scad", "json"],
+        formats=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
         cadquery_available=service.renderer.cadquery_available(),
         openscad_available=service.renderer.openscad_available(),
         configured_planner_mode=settings.planner_mode,
