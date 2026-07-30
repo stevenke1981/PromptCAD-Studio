@@ -1,0 +1,90 @@
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.cad import CadDocument, ValidationReport
+
+OutputFormat = Literal["step", "stl", "dxf", "svg", "py", "scad", "json"]
+PlannerChoice = Literal["auto", "rule", "llm"]
+
+
+def default_formats() -> list[OutputFormat]:
+    return ["step", "stl", "dxf", "svg", "py", "scad", "json"]
+
+
+class StrictApiModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlanRequest(StrictApiModel):
+    prompt: str = Field(min_length=3, max_length=20_000)
+    planner: PlannerChoice = "auto"
+
+
+class GenerateRequest(PlanRequest):
+    formats: list[OutputFormat] = Field(
+        default_factory=default_formats,
+        min_length=1,
+        max_length=7,
+    )
+    render: bool = True
+
+
+class GenerateFromSpecRequest(StrictApiModel):
+    spec: CadDocument
+    formats: list[OutputFormat] = Field(
+        default_factory=default_formats,
+        min_length=1,
+        max_length=7,
+    )
+    render: bool = True
+
+
+class PlanResponse(StrictApiModel):
+    spec: CadDocument
+    validation: ValidationReport
+    planner_used: str
+
+
+class Artifact(StrictApiModel):
+    filename: str
+    media_type: str
+    size: int
+    url: str
+
+
+class JobManifest(StrictApiModel):
+    job_id: str
+    status: Literal["completed", "source_only", "failed"]
+    created_at: str
+    prompt: str
+    planner_used: str
+    renderer_used: str
+    requested_formats: list[OutputFormat]
+    spec: CadDocument
+    validation: ValidationReport
+    artifacts: list[Artifact] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class JobListItem(StrictApiModel):
+    job_id: str
+    status: str
+    created_at: str
+    prompt: str
+    name: str
+    renderer_used: str
+
+
+class CapabilityResponse(StrictApiModel):
+    planners: list[str]
+    base_features: list[str]
+    hole_types: list[str]
+    formats: list[str]
+    cadquery_available: bool
+    openscad_available: bool
+    configured_planner_mode: str
+    configured_render_backend: str

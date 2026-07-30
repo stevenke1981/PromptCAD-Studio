@@ -1,0 +1,33 @@
+services:
+  promptcad:
+    build: .
+    ports:
+      - "${PROMPTCAD_PORT:-8000}:8000"
+    environment:
+      PROMPTCAD_ENV: "${PROMPTCAD_ENV:-production}"
+      PROMPTCAD_DATA_DIR: /app/generated
+      PROMPTCAD_PLANNER_MODE: "${PROMPTCAD_PLANNER_MODE:-auto}"
+      PROMPTCAD_RENDER_BACKEND: "${PROMPTCAD_RENDER_BACKEND:-auto}"
+      PROMPTCAD_ALLOW_SOURCE_FALLBACK: "${PROMPTCAD_ALLOW_SOURCE_FALLBACK:-true}"
+      PROMPTCAD_RENDER_TIMEOUT_SECONDS: "${PROMPTCAD_RENDER_TIMEOUT_SECONDS:-120}"
+      PROMPTCAD_MAX_PROMPT_CHARS: "${PROMPTCAD_MAX_PROMPT_CHARS:-4000}"
+      PROMPTCAD_API_TOKEN: "${PROMPTCAD_API_TOKEN:-}"
+      PROMPTCAD_CORS_ORIGINS: "${PROMPTCAD_CORS_ORIGINS:-http://localhost:8000,http://127.0.0.1:8000}"
+      PROMPTCAD_LLM_BASE_URL: "${PROMPTCAD_LLM_BASE_URL:-https://api.openai.com/v1}"
+      PROMPTCAD_LLM_API_KEY: "${PROMPTCAD_LLM_API_KEY:-}"
+      PROMPTCAD_LLM_MODEL: "${PROMPTCAD_LLM_MODEL:-gpt-5.6}"
+      PROMPTCAD_LLM_STRUCTURED_MODE: "${PROMPTCAD_LLM_STRUCTURED_MODE:-json_schema}"
+      PROMPTCAD_LLM_TIMEOUT_SECONDS: "${PROMPTCAD_LLM_TIMEOUT_SECONDS:-90}"
+      PROMPTCAD_LLM_MAX_RETRIES: "${PROMPTCAD_LLM_MAX_RETRIES:-1}"
+      PROMPTCAD_LLM_FALLBACK_TO_RULE: "${PROMPTCAD_LLM_FALLBACK_TO_RULE:-true}"
+    volumes:
+      - ./generated:/app/generated
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3).read(1)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped

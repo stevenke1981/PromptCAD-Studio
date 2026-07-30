@@ -1,0 +1,18 @@
+[
+  {
+    "name": "plate-four-holes",
+    "prompt": "畫一個鋁合金固定板，長120mm、寬60mm、厚10mm，四角各一個 M6 通孔，孔中心離邊緣10mm，四角 R5。"
+  },
+  {
+    "name": "washer",
+    "prompt": "做一個墊圈，外徑30mm、內徑15mm、厚5mm。"
+  },
+  {
+    "name": "l-bracket",
+    "prompt": "Create an L bracket 80 mm wide, 50 mm deep, 60 mm tall, 4 mm thick, with two 5 mm holes."
+  },
+  {
+    "name": "enclosure",
+    "prompt": "做一個100x70x30mm的開口盒，壁厚2mm，底部四角3mm通孔。"
+  }
+]

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PromptCAD Studio</title>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PROMPT → PARAMETRIC CAD</div>
+      <h1>PromptCAD Studio</h1>
+    </div>
+    <a class="docs" href="/docs" target="_blank" rel="noreferrer">API Docs</a>
+  </header>
+
+  <main class="layout">
+    <section class="panel composer">
+      <label for="prompt">描述你要的零件</label>
+      <textarea id="prompt" rows="8">畫一個鋁合金固定板，長120mm、寬60mm、厚10mm，四角各一個 M6 通孔，孔中心離邊緣10mm，四角 R5。</textarea>
+
+      <div class="controls">
+        <label>規劃器
+          <select id="planner">
+            <option value="auto">自動</option>
+            <option value="rule">本地規則</option>
+            <option value="llm">LLM</option>
+          </select>
+        </label>
+        <label class="token">API Token（選填）
+          <input id="token" type="password" autocomplete="off" placeholder="伺服器有啟用時才需要" />
+        </label>
+      </div>
+
+      <fieldset>
+        <legend>輸出</legend>
+        <div class="checks">
+          <label><input type="checkbox" value="step" checked /> STEP</label>
+          <label><input type="checkbox" value="stl" checked /> STL</label>
+          <label><input type="checkbox" value="dxf" checked /> DXF</label>
+          <label><input type="checkbox" value="svg" checked /> SVG</label>
+          <label><input type="checkbox" value="py" checked /> CadQuery</label>
+          <label><input type="checkbox" value="scad" checked /> OpenSCAD</label>
+          <label><input type="checkbox" value="json" checked /> JSON</label>
+        </div>
+      </fieldset>
+
+      <button id="generate">產生 CAD</button>
+      <p id="status" class="status">準備完成。</p>
+
+      <div class="examples">
+        <span>快速範例：</span>
+        <button data-example="做一個墊圈，外徑30mm、內徑15mm、厚5mm。">墊圈</button>
+        <button data-example="做一個100x70x30mm的開口盒，壁厚2mm，底部四角3mm通孔。">外殼</button>
+        <button data-example="Create an L bracket 80 mm wide, 50 mm deep, 60 mm tall, 4 mm thick, with two 5 mm holes.">L 支架</button>
+      </div>
+    </section>
+
+    <section class="panel result">
+      <div class="result-head">
+        <div>
+          <div class="eyebrow">RESULT</div>
+          <h2 id="part-name">尚未生成</h2>
+        </div>
+        <span id="badge" class="badge neutral">IDLE</span>
+      </div>
+      <div class="preview-wrap">
+        <img id="preview" alt="CAD preview" hidden />
+        <div id="preview-empty" class="preview-empty">生成後會顯示工程預覽</div>
+      </div>
+      <div id="warnings" class="warnings"></div>
+      <div id="downloads" class="downloads"></div>
+      <details>
+        <summary>可編輯 CAD DSL / JSON</summary>
+        <textarea id="spec" class="spec-editor" rows="18" spellcheck="false">{}</textarea>
+        <button id="regenerate" class="secondary full" type="button">套用 JSON 並重新輸出</button>
+      </details>
+    </section>
+  </main>
+
+  <section class="history panel">
+    <div class="result-head">
+      <div><div class="eyebrow">RECENT JOBS</div><h2>最近工作</h2></div>
+      <button id="refresh" class="secondary">重新整理</button>
+    </div>
+    <div id="jobs" class="jobs"></div>
+  </section>
+
+  <script src="/assets/app.js" defer></script>
+</body>
+</html>

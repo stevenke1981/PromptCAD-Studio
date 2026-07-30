@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "name": "promptcad-plate",
+  "source_prompt": "鋁合金固定板，長120mm、寬60mm、厚10mm，四角 M6 通孔，孔中心離邊緣10mm，四角 R5。",
+  "unit": "mm",
+  "material": "aluminum",
+  "base": {
+    "kind": "plate",
+    "length": 120.0,
+    "width": 60.0,
+    "thickness": 10.0
+  },
+  "holes": [
+    {
+      "kind": "hole",
+      "x": -50.0,
+      "y": -20.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 50.0,
+      "y": -20.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": 50.0,
+      "y": 20.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    },
+    {
+      "kind": "hole",
+      "x": -50.0,
+      "y": 20.0,
+      "z": 0.0,
+      "axis": "z",
+      "diameter": 6.6,
+      "hole_type": "clearance",
+      "depth": null,
+      "thread": "M6",
+      "counterbore_diameter": null,
+      "counterbore_depth": null,
+      "countersink_diameter": null,
+      "countersink_angle": null
+    }
+  ],
+  "fillets": [
+    {
+      "kind": "fillet",
+      "radius": 5.0,
+      "selector": "vertical"
+    }
+  ],
+  "chamfers": [],
+  "assumptions": [
+    "M6 未指定攻牙，依一般間隙孔近似"
+  ],
+  "notes": [],
+  "planner": {
+    "planner": "rule",
+    "confidence": 0.92,
+    "review_required": true
+  }
+}

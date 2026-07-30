@@ -1,0 +1,13 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - cadquery=2.8.0
+  - setuptools
+  - pip
+  - pip:
+      - fastapi>=0.128,<1
+      - uvicorn[standard]>=0.40,<1
+      - pydantic>=2.13,<3
+      - pydantic-settings>=2.14,<3
+      - httpx>=0.28,<1

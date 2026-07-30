@@ -1,0 +1,10 @@
+name: promptcad
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - cadquery=2.8.0
+  - setuptools
+  - pip
+  - pip:
+      - -e .[dev]
