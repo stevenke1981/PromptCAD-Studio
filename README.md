@@ -4,7 +4,7 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 
 ```text
 提示詞
-  → 本地規則／OpenAI-compatible LLM 規劃器
+  → 標準件 CAD Agent／本地規則／OpenAI-compatible LLM 規劃器
   → 受控 CadDocument 1.0 DSL
   → 幾何與製造前驗證
   → CadQuery／OpenSCAD 編譯器
@@ -16,6 +16,7 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 ## 已包含
 
 - 中文／英文提示詞本地解析，沒有 API Key 也能使用。
+- 標準件 CAD Agent：辨識 NEMA17 並帶入有來源、可覆寫的馬達面尺寸與支架參數。
 - OpenAI-compatible LLM 規劃器，支援 `json_schema`、`json_object` 與純提示 JSON 模式。
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
 - 基礎幾何：板件、圓柱、圓環、L 型支架、開口外殼。
@@ -97,6 +98,15 @@ uvicorn app.main:app --reload
 
 ## 使用方式
 
+### 標準件 CAD Agent
+
+```powershell
+promptcad generate "畫一個可固定 NEMA17 馬達的支架" --planner agent
+promptcad generate "NEMA17 馬達支架，板厚5mm，支架寬70mm" --planner agent
+```
+
+`auto` 也會自動辨識 NEMA17。Agent 從版本化標準件目錄載入 42.3 mm 馬達面、31 mm 安裝孔距、4×M3、Ø22 定位凸台與 Ø5 軸徑，並在輸出 DSL 的 `standards` 保存來源。板厚、支架寬度、底板深度與立板高度可由提示詞覆寫。
+
 ### Web 編輯流程
 
 1. 輸入「長 120、寬 60、厚 10，四角 M6 通孔，R5」。
@@ -109,6 +119,7 @@ uvicorn app.main:app --reload
 
 ```bash
 promptcad generate "畫一個長120、寬60、厚10的固定板，四角M6孔，R5" --planner rule
+promptcad generate "畫一個可固定 NEMA17 馬達的支架" --planner agent
 promptcad validate examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/enclosure-side-cutout/spec.json

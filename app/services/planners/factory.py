@@ -4,18 +4,22 @@ from app.core.config import Settings
 from app.services.planners.base import CadPlanner, PlannerError
 from app.services.planners.llm import OpenAICompatiblePlanner
 from app.services.planners.rule_based import RuleBasedPlanner
+from app.services.planners.standard_agent import StandardAwarePlanner
 
 
 class PlannerFactory:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.rule = RuleBasedPlanner()
+        self.agent = StandardAwarePlanner()
         self.llm = OpenAICompatiblePlanner(settings)
 
     def resolve(self, requested: str) -> CadPlanner:
         mode = self.settings.planner_mode if requested == "auto" else requested
         if mode == "rule":
             return self.rule
+        if mode == "agent":
+            return self.agent
         if mode == "llm":
             return self.llm
         if mode == "auto":
@@ -23,6 +27,8 @@ class PlannerFactory:
         raise PlannerError(f"Unknown planner: {requested}")
 
     async def plan(self, prompt: str, requested: str):
+        if requested in {"auto", "agent"} and self.agent.can_handle(prompt):
+            return await self.agent.plan(prompt), self.agent.name
         planner = self.resolve(requested)
         try:
             return await planner.plan(prompt), planner.name

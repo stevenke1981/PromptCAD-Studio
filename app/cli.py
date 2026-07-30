@@ -63,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate = sub.add_parser("generate", help="Generate CAD artifacts from a prompt")
     generate.add_argument("prompt")
-    generate.add_argument("--planner", choices=["auto", "rule", "llm"], default="auto")
+    generate.add_argument("--planner", choices=["auto", "agent", "rule", "llm"], default="auto")
     generate.add_argument(
         "--formats",
         nargs="+",

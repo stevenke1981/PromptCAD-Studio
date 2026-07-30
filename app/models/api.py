@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.cad import CadDocument, ValidationReport
 
 OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
-PlannerChoice = Literal["auto", "rule", "llm"]
+PlannerChoice = Literal["auto", "agent", "rule", "llm"]
 
 
 def default_formats() -> list[OutputFormat]:

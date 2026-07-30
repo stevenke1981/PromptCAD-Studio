@@ -16,6 +16,7 @@
   "cutouts": [],
   "fillets": [],
   "chamfers": [],
+  "standards": [],
   "assumptions": [],
   "notes": [],
   "planner": {"planner": "manual", "confidence": 1, "review_required": false}
@@ -118,6 +119,19 @@
 ```
 
 selector：`all`、`vertical`、`top`、`bottom`。
+
+## Standard provenance
+
+標準件 CAD Agent 會把採用的外部尺寸來源保存在 `standards`：
+
+```json
+{
+  "key": "nema17-face",
+  "revision": "2026-07-nanotec-st4118",
+  "source_label": "Nanotec ST4118 NEMA 17 product overview mechanical drawing",
+  "source_url": "https://www.nanotec.com/fileadmin/files/Baureihenuebersichten/Schrittmotoren/Product_Overview_ST4118.pdf"
+}
+```
 
 ## 驗證與重建
 

@@ -3,6 +3,7 @@
 ## 可用功能
 
 - Prompt → 本地規則／OpenAI-compatible LLM → CadDocument 1.0。
+- 標準件 CAD Agent：NEMA17 自動辨識、來源追蹤、參數覆寫與完整支架輸出。
 - Web UI、REST API、CLI。
 - 可編輯 JSON 後重新驗證與輸出。
 - Plate、cylinder、ring、L bracket、open enclosure。
@@ -15,7 +16,7 @@
 
 ## 本封裝已驗證
 
-- 34 個 pytest 測試通過。
+- 40 個 pytest 測試通過。
 - Python 3.12.13 的 uv 鎖定環境可重現安裝。
 - Ruff 全專案檢查通過（自動排除本機 `.venv` 與生成產物）。
 - Python `compileall` 通過。
@@ -31,7 +32,7 @@
 
 ## 下一階段
 
-- NEMA17 標準件資料、可覆寫參數與馬達支架垂直切片。
+- 擴充標準件目錄至 NEMA23、常用軸承與連接器。
 - 2D 草圖 DSL：線、圓弧、約束、拉伸、旋轉與陣列。
 - 多孔群與 pattern／mirror。
 - 正式工程圖、尺寸、公差、BOM 與標題欄。

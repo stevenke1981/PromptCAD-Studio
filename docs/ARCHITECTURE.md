@@ -2,6 +2,7 @@
 
 ```text
 Prompt
+  ├─ StandardAwarePlanner → versioned standards catalog
   ├─ RuleBasedPlanner
   └─ OpenAICompatiblePlanner
           ↓

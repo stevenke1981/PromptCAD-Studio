@@ -1,4 +1,4 @@
-id: BASELINE-20260730-002
+id: BASELINE-20260730-003
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -7,6 +7,7 @@ accepted_features:
   - CadQuery STEP, STL, DXF, and SVG output
   - OpenSCAD fallback
   - Dependency-free A4 orthographic drawing PDF
+  - Standards-aware NEMA17 CAD Agent with provenance and overrides
 critical_user_flows:
   - Chinese prompt to validated DSL and downloadable artifacts
   - Edited DSL to regenerated artifacts
@@ -30,8 +31,9 @@ known_limitations:
   - Physical thread geometry is not generated
   - Docker, OpenSCAD executable, and Conda paths were not run locally
 evidence:
-  - 34 pytest tests passed
+  - 40 pytest tests passed
   - app coverage 77 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views
+  - NEMA17 prompt produced one 60 x 50 x 53 mm STEP solid with nine inferred holes

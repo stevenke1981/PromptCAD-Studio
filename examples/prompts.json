@@ -22,5 +22,9 @@
   {
     "name": "enclosure-side-cutout",
     "prompt": "做一個94x58x22mm外殼，壁厚2mm，+Y面一個14x8mm矩形開口，中心x=25mm、z=9mm。"
+  },
+  {
+    "name": "nema17-motor-bracket",
+    "prompt": "畫一個可固定 NEMA17 馬達的支架。"
   }
 ]

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 650">
+<style>
+  .bg { fill:#0b1020; } .grid { stroke:#18213a; stroke-width:1; }
+  .solid { fill:#26324f; stroke:#8fb4ff; stroke-width:2; }
+  .accent { fill:#3e5f93; stroke:#a9c5ff; stroke-width:1.5; }
+  .hidden { fill:#0b1020; stroke:#64748b; stroke-dasharray:7 6; stroke-width:1.5; }
+  .cut { fill:#0b1020; stroke:#f0b36a; stroke-width:2; }
+  .center { stroke:#f0b36a; stroke-width:1; stroke-dasharray:4 3; }
+  .title { fill:#eef4ff; font:700 28px system-ui,sans-serif; }
+  .sub { fill:#9fb0cd; font:16px system-ui,sans-serif; }
+  .badge { fill:#d7e5ff; font:700 13px system-ui,sans-serif; letter-spacing:1.2px; }
+</style>
+<rect width="100%" height="100%" class="bg"/>
+<g opacity=".55"><line x1="0" y1="0" x2="0" y2="650" class="grid"/><line x1="50" y1="0" x2="50" y2="650" class="grid"/><line x1="100" y1="0" x2="100" y2="650" class="grid"/><line x1="150" y1="0" x2="150" y2="650" class="grid"/><line x1="200" y1="0" x2="200" y2="650" class="grid"/><line x1="250" y1="0" x2="250" y2="650" class="grid"/><line x1="300" y1="0" x2="300" y2="650" class="grid"/><line x1="350" y1="0" x2="350" y2="650" class="grid"/><line x1="400" y1="0" x2="400" y2="650" class="grid"/><line x1="450" y1="0" x2="450" y2="650" class="grid"/><line x1="500" y1="0" x2="500" y2="650" class="grid"/><line x1="550" y1="0" x2="550" y2="650" class="grid"/><line x1="600" y1="0" x2="600" y2="650" class="grid"/><line x1="650" y1="0" x2="650" y2="650" class="grid"/><line x1="700" y1="0" x2="700" y2="650" class="grid"/><line x1="750" y1="0" x2="750" y2="650" class="grid"/><line x1="800" y1="0" x2="800" y2="650" class="grid"/><line x1="850" y1="0" x2="850" y2="650" class="grid"/><line x1="900" y1="0" x2="900" y2="650" class="grid"/><line x1="0" y1="0" x2="900" y2="0" class="grid"/><line x1="0" y1="50" x2="900" y2="50" class="grid"/><line x1="0" y1="100" x2="900" y2="100" class="grid"/><line x1="0" y1="150" x2="900" y2="150" class="grid"/><line x1="0" y1="200" x2="900" y2="200" class="grid"/><line x1="0" y1="250" x2="900" y2="250" class="grid"/><line x1="0" y1="300" x2="900" y2="300" class="grid"/><line x1="0" y1="350" x2="900" y2="350" class="grid"/><line x1="0" y1="400" x2="900" y2="400" class="grid"/><line x1="0" y1="450" x2="900" y2="450" class="grid"/><line x1="0" y1="500" x2="900" y2="500" class="grid"/><line x1="0" y1="550" x2="900" y2="550" class="grid"/><line x1="0" y1="600" x2="900" y2="600" class="grid"/><line x1="0" y1="650" x2="900" y2="650" class="grid"/></g>
+<text x="36" y="48" class="title">nema17-motor-bracket</text>
+<text x="36" y="76" class="sub">Top preview · 60 × 50 mm · material: aluminum</text>
+<text x="36" y="618" class="badge">REVIEW REQUIRED</text>
+<rect x="198.00" y="115.00" width="504.00" height="420.00" rx="4" class="solid"/><rect x="198.00" y="115.00" width="504.00" height="25.20" class="accent"/><circle cx="265.20" cy="451.00" r="18.90" class="cut"/><line x1="257.20" y1="451.00" x2="273.20" y2="451.00" class="center"/><line x1="265.20" y1="443.00" x2="265.20" y2="459.00" class="center"/><circle cx="265.20" cy="199.00" r="18.90" class="cut"/><line x1="257.20" y1="199.00" x2="273.20" y2="199.00" class="center"/><line x1="265.20" y1="191.00" x2="265.20" y2="207.00" class="center"/><circle cx="634.80" cy="451.00" r="18.90" class="cut"/><line x1="626.80" y1="451.00" x2="642.80" y2="451.00" class="center"/><line x1="634.80" y1="443.00" x2="634.80" y2="459.00" class="center"/><circle cx="634.80" cy="199.00" r="18.90" class="cut"/><line x1="626.80" y1="199.00" x2="642.80" y2="199.00" class="center"/><line x1="634.80" y1="191.00" x2="634.80" y2="207.00" class="center"/>
+</svg>

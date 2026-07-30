@@ -1,0 +1,11 @@
+id: CHANGE-003
+type: feature
+risk: low
+objective: Complete phase two with a standards-aware NEMA17 CAD Agent vertical slice.
+scope:
+  - Versioned mechanical standard catalog with HTTPS provenance
+  - Dedicated standard-agent planner and automatic NEMA17 routing
+  - Inferred motor interface, shaft clearance, bracket thickness, and base mounting holes
+  - Prompt overrides for bracket width, depth, height, and thickness
+  - Full CAD and drawing outputs plus accepted example
+status: accepted

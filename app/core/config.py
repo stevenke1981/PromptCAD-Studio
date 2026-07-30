@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535)
     data_dir: Path = Path("generated")
 
-    planner_mode: Literal["auto", "rule", "llm"] = "auto"
+    planner_mode: Literal["auto", "agent", "rule", "llm"] = "auto"
     render_backend: Literal["auto", "cadquery", "openscad", "source_only"] = "auto"
     allow_source_fallback: bool = True
     render_timeout_seconds: int = Field(default=120, ge=5, le=1800)

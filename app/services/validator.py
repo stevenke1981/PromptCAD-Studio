@@ -25,6 +25,7 @@ class DesignValidator:
         self._base_checks(doc, issues)
         self._hole_checks(doc, issues)
         self._cutout_checks(doc, issues)
+        self._standard_checks(doc, issues)
         self._edge_checks(doc, issues)
 
         for assumption in doc.assumptions:
@@ -324,6 +325,51 @@ class DesignValidator:
                         feature_index=index,
                     )
                 )
+
+    @staticmethod
+    def _standard_checks(doc: CadDocument, issues: list[ValidationIssue]) -> None:
+        if not any(reference.key == "nema17-face" for reference in doc.standards):
+            return
+        if not isinstance(doc.base, LBracketBase):
+            matches = False
+        else:
+            center_z = doc.base.thickness + doc.base.vertical_height / 2
+            expected_raw = {
+                (-15.5, center_z - 15.5),
+                (15.5, center_z - 15.5),
+                (15.5, center_z + 15.5),
+                (-15.5, center_z + 15.5),
+            }
+            expected = {(round(x, 3), round(z, 3)) for x, z in expected_raw}
+            motor_holes = [
+                hole
+                for hole in doc.holes
+                if hole.axis == Axis.Y and hole.thread == "M3"
+            ]
+            actual = {(round(hole.x, 3), round(hole.z, 3)) for hole in motor_holes}
+            center_holes = [
+                hole
+                for hole in doc.holes
+                if hole.axis == Axis.Y
+                and hole.thread is None
+                and abs(hole.x) < 0.01
+                and abs(hole.z - center_z) < 0.01
+                and abs(hole.diameter - 22.5) < 0.05
+            ]
+            matches = (
+                len(motor_holes) == 4
+                and actual == expected
+                and all(abs(hole.diameter - 3.4) < 0.05 for hole in motor_holes)
+                and len(center_holes) == 1
+            )
+        if not matches:
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="standard_geometry_mismatch",
+                    message="幾何已偏離所宣告的 NEMA17 馬達面標準；請更新幾何或移除該 provenance。",
+                )
+            )
 
     @staticmethod
     def _effective_diameter(hole: HoleFeature) -> float:

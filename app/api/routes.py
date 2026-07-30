@@ -36,7 +36,7 @@ async def capabilities(request: Request):
     service = _service(request)
     settings = request.app.state.settings
     return CapabilityResponse(
-        planners=["auto", "rule", "llm"],
+        planners=["auto", "agent", "rule", "llm"],
         base_features=["plate", "cylinder", "ring", "l_bracket", "enclosure"],
         feature_types=["hole", "rectangular_cutout", "fillet", "chamfer"],
         hole_types=["through", "blind", "clearance", "tapped", "counterbore", "countersink"],

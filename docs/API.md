@@ -30,7 +30,7 @@
 }
 ```
 
-`planner` 可為 `auto`、`rule`、`llm`。
+`planner` 可為 `auto`、`agent`、`rule`、`llm`。`auto` 遇到已支援的標準件（目前為 NEMA17 馬達面）會優先路由至標準件 CAD Agent。
 
 ## `POST /generate`
 

@@ -172,6 +172,13 @@ class PlannerMetadata(StrictModel):
     review_required: bool = False
 
 
+class StandardReference(StrictModel):
+    key: str = Field(min_length=1, max_length=80)
+    revision: str = Field(min_length=1, max_length=40)
+    source_label: str = Field(min_length=1, max_length=160)
+    source_url: str = Field(pattern=r"^https://", max_length=500)
+
+
 class CadDocument(StrictModel):
     schema_version: Literal["1.0"] = "1.0"
     name: str = Field(default="promptcad-part", min_length=1, max_length=80)
@@ -183,6 +190,7 @@ class CadDocument(StrictModel):
     cutouts: list[RectangularCutoutFeature] = Field(default_factory=list, max_length=32)
     fillets: list[FilletFeature] = Field(default_factory=list, max_length=8)
     chamfers: list[ChamferFeature] = Field(default_factory=list, max_length=8)
+    standards: list[StandardReference] = Field(default_factory=list, max_length=16)
     assumptions: list[str] = Field(default_factory=list, max_length=32)
     notes: list[str] = Field(default_factory=list, max_length=32)
     planner: PlannerMetadata

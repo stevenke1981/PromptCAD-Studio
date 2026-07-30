@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from app.models.cad import (
     CadDocument,
     EnclosureBase,
@@ -39,3 +41,15 @@ def test_engineering_drawing_pdf_contains_views_and_valid_pdf_markers(tmp_path):
     assert b"FRONT VIEW" in content
     assert b"94 x 58 x 22 mm" in content
     assert len(content) > 1000
+
+
+def test_engineering_drawing_front_view_contains_y_axis_motor_holes(tmp_path):
+    from app.services.planners.standard_agent import StandardAwarePlanner
+
+    doc = asyncio.run(StandardAwarePlanner().plan("NEMA17 馬達支架"))
+    path = tmp_path / "nema17.pdf"
+
+    EngineeringDrawingPdf().write(doc, path)
+
+    content = path.read_bytes()
+    assert content.count(b" c S") >= 5

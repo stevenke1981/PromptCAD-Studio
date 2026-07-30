@@ -144,6 +144,15 @@ class EngineeringDrawingPdf:
             self._text(left, bottom + height + 16, 9, "FRONT VIEW"),
             self._rect(left, bottom, width, height),
         ]
+        for hole in doc.holes:
+            if hole.axis.value == "y":
+                commands.append(
+                    self._circle(
+                        cx + hole.x * scale,
+                        bottom + hole.z * scale,
+                        hole.diameter * scale / 2,
+                    )
+                )
         if isinstance(doc.base, EnclosureBase):
             inner_left = left + doc.base.wall_thickness * scale
             inner_width = width - 2 * doc.base.wall_thickness * scale
@@ -187,6 +196,15 @@ class EngineeringDrawingPdf:
             self._text(left, bottom + height + 16, 9, "RIGHT VIEW"),
             self._rect(left, bottom, width, height),
         ]
+        for hole in doc.holes:
+            if hole.axis.value == "x":
+                commands.append(
+                    self._circle(
+                        cx + hole.y * scale,
+                        bottom + hole.z * scale,
+                        hole.diameter * scale / 2,
+                    )
+                )
         if isinstance(doc.base, EnclosureBase):
             for cutout in doc.cutouts:
                 if cutout.face not in {SideFace.POSITIVE_X, SideFace.NEGATIVE_X}:

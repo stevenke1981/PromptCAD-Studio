@@ -1,0 +1,78 @@
+{
+  "valid": true,
+  "review_required": true,
+  "issues": [
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 0
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 1
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 2
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M3 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 3
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M4 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 5
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M4 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 6
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M4 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 7
+    },
+    {
+      "severity": "info",
+      "code": "thread_annotation_only",
+      "message": "M4 目前以圓柱孔近似，未建立實體螺旋牙。",
+      "feature_index": 8
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "依 NEMA17 常見 31 mm 方形孔距與 M3 馬達面安裝孔建立介面。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "馬達定位凸台以 22.5 mm 中心通孔預留 0.5 mm 直徑間隙。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "3 mm 鋁板是常見商品支架厚度，不是 NEMA 強制標準；可在提示詞以板厚覆寫。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "底板加入四個 M4 一般間隙孔，位置為 ±22 x ±15 mm。",
+      "feature_index": null
+    }
+  ]
+}

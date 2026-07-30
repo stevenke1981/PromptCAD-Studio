@@ -1,0 +1,26 @@
+change_id: CHANGE-003
+status: passed
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+evidence:
+  tests: 40 passed
+  coverage: 77 percent
+  planner: standard-agent
+  cadquery: completed
+  step:
+    solids: 1
+    size_mm: [60, 50, 53]
+    cylindrical_faces: 9
+  inferred_interface:
+    face_mm: 42.3
+    mounting_pitch_mm: 31
+    motor_fasteners: 4xM3
+    pilot_clearance_mm: 22.5
+  provenance_count: 2
+  audit_fixes:
+    - compact Chinese NEMA17 routing
+    - cm and inch conversion
+    - standard geometry mismatch blocking
+    - motor-face holes visible in drawing PDF
+    - standards and assumptions visible in Web results

@@ -129,6 +129,10 @@ function showManifest(data) {
   warningsEl.innerHTML = '';
   const messages = [
     ...data.warnings,
+    ...data.spec.assumptions,
+    ...data.spec.standards.map(
+      (standard) => `標準來源：${standard.key} ${standard.revision} — ${standard.source_url}`,
+    ),
     ...data.validation.issues
       .filter((issue) => issue.severity !== 'info')
       .map((issue) => issue.message),
