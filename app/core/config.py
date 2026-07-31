@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     feature_tree_concurrency: int = Field(default=4, ge=1, le=16)
     max_generate_body_bytes: int = Field(default=2_000_000, ge=10_000, le=10_000_000)
     generate_concurrency: int = Field(default=4, ge=1, le=16)
+    async_queue_max_pending: int = Field(default=100, ge=1, le=10_000)
+    async_queue_lease_seconds: int = Field(default=300, ge=15, le=3600)
+    async_queue_max_attempts: int = Field(default=2, ge=1, le=10)
+    worker_poll_seconds: float = Field(default=0.5, ge=0.05, le=30)
 
     api_token: str | None = None
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000"
@@ -99,6 +103,10 @@ class Settings(BaseSettings):
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def queue_db_path(self) -> Path:
+        return self.data_dir / ".queue" / "promptcad.sqlite3"
 
 
 @lru_cache(maxsize=1)

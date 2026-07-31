@@ -16,6 +16,7 @@ from pathlib import Path
 
 from app.core.config import Settings
 from app.services.backends import ocp_runtime_conflicted
+from app.services.cancellation import CancelCheck, JobCancelled
 
 
 @dataclass(slots=True)
@@ -55,7 +56,10 @@ class Renderer:
         job_dir: Path,
         formats: list[str],
         backend_override: str | None = None,
+        cancel_check: CancelCheck | None = None,
     ) -> RenderResult:
+        if cancel_check is not None and cancel_check():
+            raise JobCancelled("CAD rendering cancelled before start")
         job_dir = job_dir.resolve()
         requested = set(formats)
         backend = self._choose_backend(backend_override)
@@ -109,7 +113,10 @@ class Renderer:
                         "--formats",
                         *sorted(render_formats),
                     ]
-                    self._run(cmd, staging)
+                    if cancel_check is None:
+                        self._run(cmd, staging)
+                    else:
+                        self._run(cmd, staging, cancel_check)
                     warnings.extend(self._read_render_warnings(staging))
                     self._promote_outputs(
                         staging,
@@ -123,6 +130,8 @@ class Renderer:
                     warnings=warnings,
                     fallback_chain=fallback_chain,
                 )
+            except JobCancelled:
+                raise
             except RuntimeError as exc:
                 if not self.settings.allow_source_fallback:
                     raise
@@ -167,16 +176,19 @@ class Renderer:
                         dir=job_dir,
                     ) as staging_value:
                         staging = Path(staging_value).resolve()
-                        self._run(
-                            [
-                                str(Path(executable).resolve()),
-                                "-o",
-                                str(staging / "model.stl"),
-                                str(job_dir / "model.scad"),
-                            ],
-                            staging,
-                        )
+                        command = [
+                            str(Path(executable).resolve()),
+                            "-o",
+                            str(staging / "model.stl"),
+                            str(job_dir / "model.scad"),
+                        ]
+                        if cancel_check is None:
+                            self._run(command, staging)
+                        else:
+                            self._run(command, staging, cancel_check)
                         self._promote_outputs(staging, job_dir, {"stl"})
+                except JobCancelled:
+                    raise
                 except RuntimeError as exc:
                     if not self.settings.allow_source_fallback:
                         raise
@@ -245,7 +257,12 @@ class Renderer:
             return "openscad"
         return "source_only"
 
-    def _run(self, command: list[str], cwd: Path) -> None:
+    def _run(
+        self,
+        command: list[str],
+        cwd: Path,
+        cancel_check: CancelCheck | None = None,
+    ) -> None:
         child_env = {
             key: os.environ[key]
             for key in (
@@ -304,6 +321,10 @@ class Renderer:
                 started = time.monotonic()
                 failure: str | None = None
                 while process.poll() is None:
+                    if cancel_check is not None and cancel_check():
+                        self._terminate_process_tree(process, windows_job)
+                        windows_job = None
+                        raise JobCancelled("CAD rendering cancelled")
                     if (
                         time.monotonic() - started
                         > self.settings.render_timeout_seconds

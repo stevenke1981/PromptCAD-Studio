@@ -11,6 +11,8 @@ from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 
 OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 PlannerChoice = Literal["auto", "agent", "rule", "llm"]
+QueueJobKind = Literal["prompt", "spec"]
+QueueJobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 BackendChoice = Literal[
     "auto",
     "cadquery",
@@ -139,14 +141,14 @@ class PlannerCapability(StrictApiModel):
 
 class FormatResult(StrictApiModel):
     format: OutputFormat
-    status: Literal["produced", "unavailable", "failed", "source_only"]
+    status: Literal["produced", "unavailable", "failed", "source_only", "cancelled"]
     filename: str | None = None
     reason: str | None = None
 
 
 class JobManifest(StrictApiModel):
     job_id: str
-    status: Literal["completed", "source_only", "failed"]
+    status: Literal["completed", "source_only", "failed", "cancelled"]
     created_at: str
     prompt: str
     planner_used: str
@@ -178,6 +180,21 @@ class JobListItem(StrictApiModel):
     renderer_used: str
 
 
+class QueueJobResponse(StrictApiModel):
+    queue_job_id: str
+    kind: QueueJobKind
+    status: QueueJobStatus
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    attempts: int = 0
+    cancellation_requested: bool = False
+    result_job_id: str | None = None
+    result_url: str | None = None
+    error: str | None = None
+
+
 class CapabilityResponse(StrictApiModel):
     planners: list[str]
     base_features: list[str]
@@ -197,3 +214,5 @@ class CapabilityResponse(StrictApiModel):
     configured_render_backend: str
     backends: list[BackendCapability] = Field(default_factory=list)
     planner_capabilities: list[PlannerCapability] = Field(default_factory=list)
+    async_queue_available: bool = True
+    async_job_kinds: list[QueueJobKind] = Field(default_factory=lambda: ["prompt", "spec"])

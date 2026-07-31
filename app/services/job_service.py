@@ -29,6 +29,7 @@ from app.models.cad import CadDocument
 from app.models.dxf import DxfAnalysisResponse, DxfFeatureTreeNode
 from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 from app.services.backends import BACKEND_CONTRACT_VERSION, default_backend_registry
+from app.services.cancellation import CancelCheck, JobCancelled
 from app.services.drawing_pdf import EngineeringDrawingPdf
 from app.services.dxf_analysis import DxfAnalysisError, DxfFeatureExtractor
 from app.services.image_analysis import ImageFeatureExtractor
@@ -86,8 +87,13 @@ class JobService:
         formats: list[str],
         render: bool,
         backend: str = "auto",
+        cancel_check: CancelCheck | None = None,
     ) -> JobManifest:
+        if cancel_check is not None and cancel_check():
+            raise JobCancelled("Job cancelled before planning")
         plan = await self.plan(prompt, planner_choice)
+        if cancel_check is not None and cancel_check():
+            raise JobCancelled("Job cancelled after planning")
         return await self._materialize(
             spec=plan.spec,
             validation=plan.validation,
@@ -96,6 +102,7 @@ class JobService:
             formats=formats,
             render=render,
             backend=backend,
+            cancel_check=cancel_check,
         )
 
     async def generate_from_spec(
@@ -104,7 +111,10 @@ class JobService:
         formats: list[str],
         render: bool,
         backend: str = "auto",
+        cancel_check: CancelCheck | None = None,
     ) -> JobManifest:
+        if cancel_check is not None and cancel_check():
+            raise JobCancelled("Job cancelled before validation")
         validation = self.validator.validate(spec)
         return await self._materialize(
             spec=spec,
@@ -114,6 +124,7 @@ class JobService:
             formats=formats,
             render=render,
             backend=backend,
+            cancel_check=cancel_check,
         )
 
     async def analyze_image(
@@ -503,7 +514,10 @@ class JobService:
         render: bool,
         backend: str = "auto",
         extra_json_artifacts: dict[str, object] | None = None,
+        cancel_check: CancelCheck | None = None,
     ) -> JobManifest:
+        if cancel_check is not None and cancel_check():
+            raise JobCancelled("Job cancelled before materialization")
         selection_request = (
             self.settings.render_backend
             if backend == "auto" and self.settings.render_backend != "auto"
@@ -600,6 +614,7 @@ class JobService:
                         job_dir,
                         render_formats,
                         selection.effective,
+                        cancel_check,
                     )
                 renderer_used = result.renderer
                 status = result.status
@@ -629,6 +644,11 @@ class JobService:
                             message=message,
                         )
                     )
+            except JobCancelled as exc:
+                status = "cancelled"
+                renderer_used = "cancelled"
+                error = str(exc)
+                warnings.append("工作已依使用者要求取消。")
             except RuntimeError as exc:
                 status = "failed"
                 renderer_used = "failed"
@@ -801,6 +821,14 @@ class JobService:
                         format=fmt,
                         status="source_only",
                         reason="No compatible server-side CAD runtime produced this format.",
+                    )
+                )
+            elif status == "cancelled":
+                results.append(
+                    FormatResult(
+                        format=fmt,
+                        status="cancelled",
+                        reason="Job was cancelled before this artifact was produced.",
                     )
                 )
             else:

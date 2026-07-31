@@ -41,6 +41,7 @@ dev = [
 
 [project.scripts]
 promptcad = "app.cli:main"
+promptcad-worker = "app.worker:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]
