@@ -1,4 +1,4 @@
-id: BASELINE-20260731-007
+id: BASELINE-20260731-009
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -8,11 +8,16 @@ accepted_features:
   - OpenSCAD fallback
   - Dependency-free A4 orthographic drawing PDF
   - Standards-aware NEMA17 CAD Agent with provenance and overrides
-  - Calibrated PNG and JPEG rectangle and circular-hole extraction
+  - Calibrated PNG, JPEG, and selected PDF-page extraction
+  - Rectangles, arbitrary closed polygon profiles, and circular-hole extraction
+  - Opt-in four-corner perspective correction with ambiguous default rejection
   - Typed editable image Feature Tree with explicit review before rendering
   - Restricted ASCII and binary DXF closed-profile and circular-hole extraction
   - CadDocument 1.1 profile extrusion with analytic line and three-point arc segments
   - Typed editable DXF Feature Tree with explicit review before rendering
+  - CadDocument 1.2 profile revolution around global Z
+  - DXF CENTER-axis revolution, linear and circular hole patterns, and conservative global fillet or chamfer inference
+  - Deterministic CadQuery, Build123d, FreeCAD, and OpenSCAD revolution sources
   - Closed CadBackend registry and capability contract 1.0
   - Deterministic CadQuery, Build123d, FreeCAD, OpenSCAD, Fusion 360, and SOLIDWORKS sources
   - Selectable backend in REST API, CLI, and Web
@@ -28,7 +33,10 @@ critical_user_flows:
   - Edited DSL to regenerated artifacts
   - Invalid geometry blocked before CAD kernel execution
   - Calibrated top-view image to reviewed Feature Tree and downloadable CAD artifacts
+  - Selected PDF page to reviewed Feature Tree and CAD preview
+  - Arbitrary closed image contour to CadDocument 1.1 profile extrusion
   - Bounded DXF to reviewed Feature Tree and downloadable CAD artifacts
+  - CENTER half-profile DXF to reviewed revolution Feature Tree, preview, and downloadable CAD artifacts
   - Selected desktop adapter to validated neutral STEP and downloadable host bundle
   - Background prompt to durable queue, independent worker, and downloadable artifacts
   - Reloaded Web session to recovered queue status and safe cancellation
@@ -42,12 +50,14 @@ protected_behavior:
   - Backend IDs are selected from a closed server allowlist
   - Missing or invalid renderer outputs cannot be reported as completed
   - Exact backends cannot silently omit requested fillets or chamfers
+  - OpenSCAD source is skipped rather than emitted when finishing semantics would be lost
   - Only the lease-owning worker can publish a queue transition
   - A cancellation that wins before terminal publication cannot expose a completed manifest
   - Missing or unauthorized queue polling does not permanently lock Web controls or discard recoverable state
 public_interfaces:
   - CadDocument schema_version 1.0
   - CadDocument schema_version 1.1 profile_extrusion
+  - CadDocument schema_version 1.2 profile_revolution
   - REST API under /api/v1
   - promptcad generate, image, dxf, validate, render, and doctor
   - POST /api/v1/image-analysis
@@ -67,6 +77,7 @@ public_interfaces:
 data_compatibility:
   - Existing CadDocument 1.0 files without cutouts remain valid
   - CadDocument 1.1 is required only for profile_extrusion
+  - CadDocument 1.2 is required only for profile_revolution; 1.2 also accepts profile_extrusion
 environment:
   - Windows PowerShell
   - Python 3.12.13
@@ -76,24 +87,28 @@ known_limitations:
   - Physical thread geometry is not generated
   - Docker, OpenSCAD executable, and Conda paths were not run locally
   - Hardened Compose YAML passed static validation but Docker runtime was unavailable locally
-  - Image extraction supports calibrated high-contrast top-view rectangles and circular holes only
-  - Perspective, arbitrary contours, occlusion, and reflective photos require future calibration modes
-  - DXF extraction supports one closed 2D modelspace line/arc profile and circular holes only
-  - DXF blocks, annotations as geometry, multiple profiles, dimensions, arrays, and multi-view inference are not converted
+  - Image extraction requires one high-contrast closed part, an explicit real-world longest-edge calibration, and user-supplied thickness
+  - Line and arc reconstruction, occlusion, reflection, scale OCR, multiple parts, and multi-view inference require future modes
+  - DXF extraction supports one closed 2D modelspace profile or one CENTER-closed half-profile
+  - Revolution first slice does not accept holes, cutouts, fillets, or chamfers
+  - DXF blocks, annotations as geometry, multiple profiles, dimensions, partial arrays, and multi-view inference are not converted
 evidence:
-  - 142 pytest tests passed
-  - app coverage 81 percent
+  - 180 pytest tests passed
+  - app coverage 82 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views
   - NEMA17 prompt produced one 60 x 50 x 53 mm STEP solid with nine inferred holes
   - Calibrated PNG produced one 100 x 60 x 5 mm STEP solid with four cylindrical faces
-  - JPEG decode, perspective-trapezoid rejection, and analysis-provenance tamper tests passed
+  - JPEG decode, multi-page PDF bounds, arbitrary profile round-trip, opt-in perspective correction, default perspective-trapezoid rejection, and analysis-provenance tamper tests passed
   - Image job manifest preserves image-feature-tree provenance and analysis/tree artifacts
-  - Web upload, Feature Tree confirmation, CAD preview, and downloads passed with zero console errors
+  - Web PDF and arbitrary-profile uploads produced editable Feature Trees and CAD previews with zero console errors
   - Python dependency audit found no known vulnerabilities
   - Line-and-arc DXF with four circles produced one valid 120 x 40 x 6 mm STEP solid with four verified hole faces
   - Web DXF upload, editable Feature Tree confirmation, 14 download links, and stale-response guard passed with zero console or page errors
+  - CENTER half-profile API and Web flows produced profile_revolution, visible preview, 19 downloads, and zero console errors
+  - CadQuery profile-revolution STEP exported and read back successfully
+  - Independent review approved with zero remaining critical, high, medium, or low findings
   - CadQuery and Build123d STEP outputs matched one solid, 80 x 40 x 5 mm bounds, and equal volume
   - Fusion 360 Web selection packaged model.fusion360.py and validated model.step with zero console errors
   - Runtime fallback provenance, missing-output rejection, bounded streams, process-tree timeout, and strict STL validation passed

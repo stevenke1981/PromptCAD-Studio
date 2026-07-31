@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from app.models.cad import CadDocument, ProfileExtrusionBase
+from app.models.cad import CadDocument, ProfileExtrusionBase, ProfileRevolutionBase
 from app.services.profile_geometry import loop_bounds
 
 _PAYLOAD_MARKER = "__PROMPTCAD_DOCUMENT_JSON__"
@@ -109,6 +109,27 @@ def _base(spec):
                     ).toShape()
                 )
         return Part.Face(Part.Wire(edges)).extrude(App.Vector(0, 0, base["thickness"]))
+    if kind == "profile_revolution":
+        # Point2D is (radius, z); preserve authored edges in global XZ.
+        edges = []
+        for segment in base["outer"]["segments"]:
+            start = segment["start"]
+            end = segment["end"]
+            start_xz = App.Vector(start["x"], 0, start["y"])
+            end_xz = App.Vector(end["x"], 0, end["y"])
+            if segment["kind"] == "line":
+                edges.append(Part.makeLine(start_xz, end_xz))
+            else:
+                mid = segment["mid"]
+                edges.append(
+                    Part.Arc(
+                        start_xz,
+                        App.Vector(mid["x"], 0, mid["y"]),
+                        end_xz,
+                    ).toShape()
+                )
+        face = Part.Face(Part.Wire(edges))
+        return face.revolve(App.Vector(0, 0, 0), App.Vector(0, 0, 1), 360)
     raise ValueError(f"unsupported base kind: {kind}")
 
 
@@ -294,6 +315,9 @@ class FreeCADCompiler:
                 max(abs(min_y), abs(max_y)),
                 doc.base.thickness,
             ]
+        elif isinstance(doc.base, ProfileRevolutionBase):
+            _, _, max_radius, max_z = loop_bounds(doc.base.outer)
+            profile_extents = [max_radius, max_radius, max_z]
         extents_payload = json.dumps(profile_extents, separators=(",", ":"))
         return _SCRIPT.replace(
             _PROFILE_EXTENTS_MARKER,

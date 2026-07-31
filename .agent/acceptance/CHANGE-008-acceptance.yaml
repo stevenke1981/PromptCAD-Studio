@@ -1,0 +1,43 @@
+change_id: CHANGE-008
+status: passed
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 153 passed
+  coverage: 81 percent
+  lint: Ruff passed
+  compile: compileall passed
+  javascript: node check passed
+  dependency_audit: no known vulnerabilities found in locked runtime dependencies
+  cli_acceptance:
+    status: PASS
+    source: two-page PDF
+    selected_page: 1 of 2
+    result: plate with sketch_rectangle and extrude
+  web_acceptance:
+    status: PASS
+    pdf_flow: selected PDF page produced editable Feature Tree and visible preview
+    arbitrary_profile_flow: triangle image produced sketch_profile and profile_extrusion
+    console_errors: 0
+    screenshot: .agent/acceptance/CHANGE-008-web.png
+  safety:
+    default_ambiguous_quadrilateral: blocked
+    explicit_perspective_correction: passed
+    pdf_page_and_page_count_bounds: passed
+    pdfium_open_render_and_teardown_peak_concurrency: 1
+    duplicate_profile_points: blocked
+    tampered_pdf_page_provenance: blocked
+  review:
+    verdict: APPROVED
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+limitations:
+  - Requires explicit scale and thickness
+  - High-contrast single closed part only
+  - Polygonal image profiles only; analytic arcs are not inferred from raster input
+  - Native PDF parsing is bounded and serialized but not isolated in a one-shot subprocess

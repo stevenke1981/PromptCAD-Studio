@@ -17,12 +17,16 @@ class RequestBodyLimitMiddleware:
         self,
         app,
         *,
-        path: str,
+        path: str | None = None,
+        path_prefix: str | None = None,
+        path_suffix: str | None = None,
         max_body_bytes: int,
         max_concurrency: int,
     ):
         self.app = app
         self.path = path
+        self.path_prefix = path_prefix
+        self.path_suffix = path_suffix
         self.max_body_bytes = max_body_bytes
         self._slots = asyncio.Semaphore(max_concurrency)
 
@@ -32,10 +36,16 @@ class RequestBodyLimitMiddleware:
         receive: Callable[[], Awaitable[dict[str, Any]]],
         send: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> None:
+        request_path = str(scope.get("path", ""))
+        matches_path = request_path == self.path if self.path is not None else False
+        if self.path_prefix is not None and self.path_suffix is not None:
+            matches_path = request_path.startswith(
+                self.path_prefix
+            ) and request_path.endswith(self.path_suffix)
         if (
             scope.get("type") != "http"
             or scope.get("method") != "POST"
-            or scope.get("path") != self.path
+            or not matches_path
         ):
             await self.app(scope, receive, send)
             return

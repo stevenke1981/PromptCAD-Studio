@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from app.models.cad import (
     ArcSegment2D,
     CadDocument,
@@ -64,9 +66,15 @@ def test_cadquery_compiler_is_deterministic_and_safe():
 
 
 def test_openscad_compiler_contains_difference():
-    code = OpenScadCompiler().compile(document())
+    doc = document().model_copy(update={"fillets": []})
+    code = OpenScadCompiler().compile(doc)
     assert "difference()" in code
     assert "cylinder(d=5" in code
+
+
+def test_openscad_compiler_refuses_lossy_finishing_source():
+    with pytest.raises(ValueError, match="cannot preserve fillet or chamfer"):
+        OpenScadCompiler().compile(document())
 
 
 def test_profile_extrusion_compilers_preserve_arc_or_use_bounded_tessellation():

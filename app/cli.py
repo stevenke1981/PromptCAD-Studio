@@ -10,7 +10,9 @@ from app.core.config import get_settings
 from app.models.cad import CadDocument
 from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
+from app.models.manufacturing import ManufacturingDrawingSpec, ReviewTransitionRequest
 from app.services.async_queue import AsyncJobQueue, QueueFullError, QueueJobNotFound
+from app.services.image_analysis import ImageAnalysisError
 from app.services.job_service import JobService
 
 BACKEND_CHOICES = [
@@ -51,68 +53,106 @@ def _validate(args) -> int:
 def _render(args) -> int:
     service = JobService(get_settings())
     spec = CadDocument.model_validate_json(Path(args.spec).read_text(encoding="utf-8"))
+    drawing_spec = (
+        ManufacturingDrawingSpec.model_validate_json(
+            Path(args.drawing_spec).read_text(encoding="utf-8")
+        )
+        if args.drawing_spec
+        else None
+    )
     manifest = asyncio.run(
         service.generate_from_spec(
             spec,
             args.formats,
             not args.no_render,
             args.backend,
+            drawing_spec=drawing_spec,
         )
     )
     print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
     return 0 if manifest.status != "failed" else 1
 
 
+def _read_image(path: Path, max_bytes: int) -> bytes | None:
+    try:
+        if path.stat().st_size > max_bytes:
+            print(f"影像或 PDF 超過 {max_bytes} 位元組限制。", file=sys.stderr)
+            return None
+        with path.open("rb") as handle:
+            data = handle.read(max_bytes + 1)
+    except OSError as exc:
+        print(f"無法讀取影像或 PDF：{exc}", file=sys.stderr)
+        return None
+    if len(data) > max_bytes:
+        print(f"影像或 PDF 超過 {max_bytes} 位元組限制。", file=sys.stderr)
+        return None
+    return data
+
+
 def _image(args) -> int:
     service = JobService(get_settings())
     image_path = Path(args.image)
-    if image_path.stat().st_size > service.settings.max_image_bytes:
-        print(
-            f"Image exceeds the {service.settings.max_image_bytes} byte limit",
-            file=sys.stderr,
-        )
+    data = _read_image(image_path, service.settings.max_image_bytes)
+    if data is None:
         return 2
-    with image_path.open("rb") as handle:
-        data = handle.read(service.settings.max_image_bytes + 1)
-    analysis = asyncio.run(
-        service.analyze_image(
-            data,
-            known_length_mm=args.known_length,
-            thickness_mm=args.thickness,
-            perspective_correction=args.perspective_correction,
-            page_index=args.page,
+    try:
+        analysis = asyncio.run(
+            service.analyze_image(
+                data,
+                known_length_mm=args.known_length,
+                thickness_mm=args.thickness,
+                perspective_correction=args.perspective_correction,
+                page_index=args.page,
+            )
         )
-    )
+    except (ImageAnalysisError, ValueError, RuntimeError) as exc:
+        print(f"影像分析失敗：{exc}", file=sys.stderr)
+        return 2
     if args.analysis_output:
-        Path(args.analysis_output).write_text(
-            json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        try:
+            Path(args.analysis_output).write_text(
+                json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"無法寫入影像分析結果：{exc}", file=sys.stderr)
+            return 2
     if not args.confirm:
-        print(json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        _print_json(analysis.model_dump(mode="json"))
         return 0 if analysis.convertible else 2
     if not analysis.convertible:
-        print(json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        _print_json(analysis.model_dump(mode="json"))
         return 2
     feature_tree = analysis.feature_tree
     if args.feature_tree_input:
-        edited = ImageAnalysisResponse.model_validate_json(
-            Path(args.feature_tree_input).read_text(encoding="utf-8")
-        )
+        try:
+            edited = ImageAnalysisResponse.model_validate_json(
+                Path(args.feature_tree_input).read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            print(f"無法讀取影像 Feature Tree：{exc}", file=sys.stderr)
+            return 2
         if edited.image_sha256 != analysis.image_sha256:
             print("Feature Tree input does not match the supplied image.", file=sys.stderr)
             return 2
         feature_tree = edited.feature_tree
-    manifest = asyncio.run(
-        service.generate_from_image_feature_tree(
-            analysis,
-            feature_tree,
-            formats=args.formats,
-            render=not args.no_render,
-            backend=args.backend,
+    try:
+        manifest = asyncio.run(
+            service.generate_from_image_feature_tree(
+                analysis,
+                feature_tree,
+                formats=args.formats,
+                render=not args.no_render,
+                backend=args.backend,
+            )
         )
-    )
-    print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
+    except ValueError as exc:
+        print(f"Feature Tree 驗證失敗：{exc}", file=sys.stderr)
+        return 2
+    except RuntimeError as exc:
+        print(f"CAD 輸出失敗：{exc}", file=sys.stderr)
+        return 1
+    _print_json(manifest.model_dump(mode="json"))
     return 0 if manifest.status != "failed" else 1
 
 
@@ -156,6 +196,7 @@ def _dxf(args) -> int:
                 data,
                 thickness_mm=args.thickness,
                 unit_override=args.units,
+                operation_mode=args.operation,
             )
         )
     except (ValueError, RuntimeError) as exc:
@@ -189,6 +230,7 @@ def _dxf(args) -> int:
                 current_data,
                 thickness_mm=args.thickness,
                 unit_override=args.units,
+                operation_mode=args.operation,
             )
         )
     except (ValueError, RuntimeError) as exc:
@@ -317,6 +359,13 @@ def _async_render(args) -> int:
         spec = CadDocument.model_validate_json(
             Path(args.spec).read_text(encoding="utf-8")
         )
+        drawing_spec = (
+            ManufacturingDrawingSpec.model_validate_json(
+                Path(args.drawing_spec).read_text(encoding="utf-8")
+            )
+            if args.drawing_spec
+            else None
+        )
         queued = AsyncJobQueue(get_settings()).enqueue(
             "spec",
             {
@@ -324,12 +373,62 @@ def _async_render(args) -> int:
                 "formats": args.formats,
                 "render": not args.no_render,
                 "backend": args.backend,
+                "drawing_spec": (
+                    drawing_spec.model_dump(mode="json")
+                    if drawing_spec is not None
+                    else None
+                ),
             },
         )
     except (OSError, ValueError, QueueFullError) as exc:
         print(f"無法加入背景佇列：{exc}", file=sys.stderr)
         return 2
     _print_json(queued.model_dump(mode="json"))
+    return 0
+
+
+def _manufacturing_template(args) -> int:
+    try:
+        spec = CadDocument.model_validate_json(
+            Path(args.spec).read_text(encoding="utf-8")
+        )
+        drawing_spec = JobService(get_settings()).manufacturing_template(
+            spec,
+            part_number=args.part_number,
+            drawing_number=args.drawing_number,
+            author=args.author,
+        )
+        payload = json.dumps(
+            drawing_spec.model_dump(mode="json"),
+            ensure_ascii=False,
+            indent=2,
+        )
+        if args.output:
+            Path(args.output).write_text(payload + "\n", encoding="utf-8")
+        else:
+            print(payload)
+    except (OSError, ValueError) as exc:
+        print(f"無法建立製造圖規格：{exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _manufacturing_review(args) -> int:
+    try:
+        request = ReviewTransitionRequest(
+            action=args.action,
+            expected_version=args.expected_version,
+            reviewer=args.reviewer,
+            note=args.note,
+        )
+        review = JobService(get_settings()).transition_manufacturing_review(
+            args.job_id,
+            request,
+        )
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print(f"製造圖審查失敗：{exc}", file=sys.stderr)
+        return 2
+    _print_json(review.model_dump(mode="json"))
     return 0
 
 
@@ -412,6 +511,10 @@ def build_parser() -> argparse.ArgumentParser:
     render = sub.add_parser("render", help="Render an edited spec.json")
     render.add_argument("spec")
     render.add_argument(
+        "--drawing-spec",
+        help="ManufacturingDrawingSpec JSON；啟用製造圖與審查工作流",
+    )
+    render.add_argument(
         "--formats",
         nargs="+",
         default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
@@ -427,6 +530,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     async_render.add_argument("spec")
     async_render.add_argument(
+        "--drawing-spec",
+        help="ManufacturingDrawingSpec JSON；由背景 Worker 產生製造圖工作包",
+    )
+    async_render.add_argument(
         "--formats",
         nargs="+",
         default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
@@ -435,6 +542,28 @@ def build_parser() -> argparse.ArgumentParser:
     async_render.add_argument("--no-render", action="store_true")
     _add_backend_argument(async_render)
     async_render.set_defaults(func=_async_render)
+
+    manufacturing_template = sub.add_parser(
+        "manufacturing-template",
+        help="由 CadDocument 建立安全的製造圖規格範本",
+    )
+    manufacturing_template.add_argument("spec")
+    manufacturing_template.add_argument("--output", help="drawing-spec.json 輸出路徑")
+    manufacturing_template.add_argument("--part-number")
+    manufacturing_template.add_argument("--drawing-number")
+    manufacturing_template.add_argument("--author", default="PromptCAD")
+    manufacturing_template.set_defaults(func=_manufacturing_template)
+
+    manufacturing_review = sub.add_parser(
+        "manufacturing-review",
+        help="送審、核准或退回本機製造圖工作包",
+    )
+    manufacturing_review.add_argument("job_id")
+    manufacturing_review.add_argument("action", choices=["submit", "approve", "reject"])
+    manufacturing_review.add_argument("--expected-version", type=int, required=True)
+    manufacturing_review.add_argument("--reviewer", default="owner")
+    manufacturing_review.add_argument("--note", default="")
+    manufacturing_review.set_defaults(func=_manufacturing_review)
 
     image = sub.add_parser(
         "image",
@@ -490,6 +619,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["auto", "mm", "inch", "cm"],
         default="auto",
         help="來源單位；auto 使用 DXF INSUNITS",
+    )
+    dxf.add_argument(
+        "--operation",
+        choices=["auto", "extrude", "revolve"],
+        default="auto",
+        help="建模操作；auto 會以 CENTER 線安全推論旋轉，否則拉伸",
     )
     dxf.add_argument(
         "--analysis-output",

@@ -32,7 +32,7 @@
 
 ## 第三階段：圖片／草圖轉 CAD
 
-狀態：校準正俯視矩形板與圓孔的完整垂直切片已完成。
+狀態：Phase 3 垂直切片已完成：校準圖片／PDF 頁面、矩形與任意閉合折線、圓孔及可選矩形透視校正。
 
 輸入：零件照片、手繪草圖、白板草圖、專利圖、PDF 與掃描圖。
 
@@ -45,11 +45,11 @@
 
 尺寸推估必須標示信心；沒有比例尺、已知尺寸或多視角時，不把估計值當作製造尺寸。
 
-目前切片已具備：PNG/JPEG 安全解碼、外框最長邊校準、旋轉矩形與圓孔擷取、信心分數、影像 SHA-256、可編輯 Feature Tree、人工確認、CAD DSL、STEP/STL/DXF/SVG/PDF 輸出，以及非矩形阻擋。後續再擴充四點透視校正、任意閉合輪廓、線／圓弧與真實照片驗證集。
+目前切片已具備：PNG/JPEG 與多頁 PDF 安全解碼、頁面選擇、外框最長邊校準、旋轉矩形、任意閉合折線與圓孔擷取、明確啟用的四點矩形透視校正、信心分數、來源 SHA-256、可編輯 Feature Tree、人工確認、CadDocument 1.0／1.1、STEP/STL/DXF/SVG/PDF 輸出。未校正的凸四邊形預設阻擋；後續再擴充線／圓弧、比例尺 OCR、遮擋／反光處理與真實照片驗證集。
 
 ## 第四階段：2D 工程圖轉 3D
 
-狀態：受限 DXF 單一閉合輪廓 + 圓孔 → 拉伸 3D 垂直切片已完成。
+狀態：受限 DXF 的拉伸／CENTER 半剖面旋轉、孔陣列與一致四角完成特徵垂直切片已完成。
 
 輸入 DXF／工程圖 PDF，辨識：
 
@@ -61,7 +61,7 @@
 
 輸出可編輯 Feature Tree、CadDocument 與 STEP；有歧義時產生多個候選並要求覆核。
 
-目前切片已具備：ASCII／binary DXF 安全辨識、mm／inch／cm 單位、LINE／ARC／closed LWPOLYLINE／2D POLYLINE 外框、CIRCLE 圓孔、線與三點圓弧正規化、對稱報告、可編輯 Feature Tree、CadDocument 1.1、CadQuery／OpenSCAD／SVG／PDF 輸出、一次性解析 worker、來源 HMAC 與人工確認。下一步擴充工程圖 PDF、多視圖、旋轉、陣列、倒角、圓角與尺寸約束。
+目前切片已具備：ASCII／binary DXF 安全辨識、mm／inch／cm 單位、LINE／ARC／closed LWPOLYLINE／2D POLYLINE 外框、CIRCLE 圓孔、唯一水平／垂直 CENTER 軸、線與三點圓弧正規化、對稱報告、線性／圓周孔陣列、全域一致 rounded／chamfered rectangle 推論、可編輯 Feature Tree、CadDocument 1.1／1.2、CadQuery／Build123d／FreeCAD／OpenSCAD 旋轉來源、SVG／PDF、一次性解析 worker、來源 HMAC 與人工確認。後續擴充工程圖 PDF、多視圖配對、尺寸註記、局部完成特徵與歧義候選。
 
 ## 第五階段：可擴充規劃器與多 CAD 後端
 
@@ -114,4 +114,4 @@ Web／REST／CLI enqueue
 
 ## 下一個建議里程碑
 
-補齊可製造工程圖：尺寸約束、基準、公差、表面處理、BOM 與簽核狀態；同時擴充 2D 工程圖的旋轉、陣列、多視圖與倒角／圓角推理。正式多租戶服務另需 PostgreSQL／外部 queue、租戶配額、retention、速率限制與平台核准的 seccomp／AppArmor policy。FreeCAD／Fusion 360／SOLIDWORKS host runtime 仍需各自授權環境的人工端到端驗收。
+補齊可製造工程圖：尺寸約束、基準、公差、表面處理、BOM 與簽核狀態；同時擴充 2D 工程圖的工程圖 PDF、多視圖配對、尺寸註記與歧義候選。正式多租戶服務另需 PostgreSQL／外部 queue、租戶配額、retention、速率限制與平台核准的 seccomp／AppArmor policy。FreeCAD／Fusion 360／SOLIDWORKS host runtime 仍需各自授權環境的人工端到端驗收。

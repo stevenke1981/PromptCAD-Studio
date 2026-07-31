@@ -105,12 +105,12 @@
           <div class="eyebrow">DXF → 特徵樹</div>
           <h2>DXF 轉 CAD</h2>
         </div>
-        <p>上傳受限的 2D DXF。系統會讀取外框與圓孔、轉為可編輯特徵樹，確認後才輸出 CAD。</p>
+        <p>上傳受限的 2D DXF。系統會辨識外框、圓孔陣列與 CENTER 旋轉軸，轉為可編輯特徵樹，確認後才輸出 CAD。</p>
         <label>選擇 DXF 檔
           <input id="dxf-file" type="file" accept=".dxf,application/dxf,image/vnd.dxf" />
         </label>
         <div class="image-fields">
-          <label>零件厚度（mm）
+          <label>拉伸厚度（mm）
             <input id="dxf-thickness" type="number" min="0.01" step="0.01" value="5" />
           </label>
           <label>來源單位
@@ -119,6 +119,13 @@
               <option value="mm">毫米（mm）</option>
               <option value="inch">英吋（inch）</option>
               <option value="cm">公分（cm）</option>
+            </select>
+          </label>
+          <label>建模操作
+            <select id="dxf-operation">
+              <option value="auto">自動（CENTER 線 → 旋轉）</option>
+              <option value="extrude">強制拉伸</option>
+              <option value="revolve">強制旋轉</option>
             </select>
           </label>
         </div>
@@ -152,6 +159,26 @@
         <summary>可編輯 CAD DSL / JSON</summary>
         <textarea id="spec" class="spec-editor" rows="18" spellcheck="false">{}</textarea>
         <button id="regenerate" class="secondary full" type="button">套用 JSON 並重新輸出</button>
+      </details>
+      <details id="manufacturing-panel" hidden>
+        <summary>製造圖、公差、BOM 與核准流程</summary>
+        <p class="manufacturing-note">製造規格與實體幾何分離；核准是可追溯的工作流程紀錄，不是密碼學或法律電子簽章。</p>
+        <div id="manufacturing-status" class="review-status">尚未建立製造圖工作包</div>
+        <textarea id="drawing-spec" class="spec-editor" rows="18" spellcheck="false">{}</textarea>
+        <div class="manufacturing-actions">
+          <button id="manufacturing-template" class="secondary" type="button">建立安全預設規格</button>
+          <button id="manufacturing-generate" class="secondary" type="button">產生製造圖工作包</button>
+        </div>
+        <div class="review-fields">
+          <label>操作者（自我聲明）<input id="review-actor" maxlength="80" value="owner" /></label>
+          <label>審查註記<input id="review-comment" maxlength="500" placeholder="退回時必填" /></label>
+        </div>
+        <div class="manufacturing-actions">
+          <button id="review-submit" class="secondary" type="button" disabled>送交審查</button>
+          <button id="review-approve" class="secondary" type="button" disabled>核准</button>
+          <button id="review-reject" class="secondary danger" type="button" disabled>退回</button>
+        </div>
+        <div id="review-history" class="review-history"></div>
       </details>
       <details id="feature-tree-panel" hidden>
         <summary id="feature-tree-summary">特徵樹</summary>

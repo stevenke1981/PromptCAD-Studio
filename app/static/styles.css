@@ -92,3 +92,13 @@ pre { overflow:auto; max-height:420px; background:#090e1a; border-radius:12px; p
   background: #090e1a;
 }
 .full { width: 100%; margin-top: 10px; }
+.manufacturing-note { color:var(--muted); font-size:.82rem; line-height:1.5; }
+.review-status { border-left:3px solid var(--accent); background:rgba(143,180,255,.08); padding:10px 12px; margin:10px 0; font-size:.86rem; }
+.manufacturing-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:10px; }
+.review-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+.review-fields label { color:var(--muted); font-size:.82rem; font-weight:700; }
+.review-fields input { margin-top:7px; }
+.manufacturing-actions .danger { color:var(--danger); border-color:rgba(255,142,142,.55); }
+.review-history { display:grid; gap:7px; margin-top:12px; }
+.review-event { border:1px solid var(--line); background:var(--panel-2); border-radius:10px; padding:9px 11px; font-size:.8rem; color:#cad5e8; }
+@media (max-width: 520px) { .review-fields { grid-template-columns:1fr; } }

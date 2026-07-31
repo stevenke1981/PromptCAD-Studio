@@ -1,0 +1,35 @@
+id: CHANGE-009
+type: feature
+risk: high
+objective: Complete the Phase 4 advanced DXF inference slice for revolution, hole arrays, fillets, and chamfers.
+scope:
+  - CadDocument 1.2 profile_revolution around global Z
+  - CENTER layer or linetype recognition with auto, extrude, and revolve modes
+  - Linear and circular equal-spacing hole-pattern recognition
+  - Editable Feature Tree pattern semantics with bounded expansion to explicit holes
+  - Conservative uniform rounded-rectangle and chamfered-rectangle inference
+  - CadQuery, Build123d, FreeCAD, OpenSCAD, SVG, and PDF revolution support
+  - REST, CLI, Web, capability reporting, and documentation
+protected_behavior:
+  - CadDocument 1.0 and 1.1 remain accepted and deterministic
+  - Existing one-profile DXF extrusion and circular-hole flow remains compatible
+  - DXF parsing remains in a bounded one-shot worker with HMAC provenance and human review
+  - Revolution rejects secondary cuts, holes, and finishing features in the first slice
+  - Local or ambiguous edge geometry is not promoted to a global finishing feature
+acceptance:
+  - A CENTER half-profile becomes CadDocument 1.2 and a valid revolved STEP
+  - Three equal-spaced collinear holes become one editable linear pattern and three explicit DSL holes
+  - Four equal-spaced holes become one editable circular pattern and four explicit DSL holes
+  - Uniform rounded and chamfered rectangles become sharp profiles plus vertical finishing features
+  - API worker, editable Feature Tree, generation, compilers, preview, and drawing remain consistent
+status: accepted
+evidence:
+  - 180 pytest tests passed with 82 percent app coverage
+  - Ruff passed across app and tests
+  - CadQuery exported and read back a valid profile-revolution STEP
+  - Four deterministic geometry sources, SVG preview, and PDF drawing passed focused tests
+limitations:
+  - One planar profile or half-profile only
+  - Engineering drawing PDF and multi-view association are not inferred yet
+  - Revolution first slice does not support holes, cutouts, fillets, or chamfers
+  - Only full-circle equal-spacing hole arrays and global uniform rectangle edge treatments are inferred

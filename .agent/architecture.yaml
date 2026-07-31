@@ -1,11 +1,11 @@
 updated_at: 2026-07-31
-version: 0.5.0
+version: 0.7.0
 architecture:
   input_paths:
     - prompt via REST, CLI, or Web
-    - calibrated PNG/JPEG via reviewed image Feature Tree
+    - calibrated PNG/JPEG or selected PDF page via reviewed image Feature Tree
     - restricted DXF via reviewed DXF Feature Tree
-    - manually edited CadDocument 1.0 or 1.1
+    - manually edited CadDocument 1.0, 1.1, or 1.2
   planning:
     contract: planner capabilities expose id, version, availability, input kind, and description
     implementations:
@@ -14,7 +14,7 @@ architecture:
       - llm
   canonical_model:
     name: CadDocument
-    schema_versions: ["1.0", "1.1"]
+    schema_versions: ["1.0", "1.1", "1.2"]
     rules:
       - extra fields forbidden
       - units normalized to millimeters
@@ -98,6 +98,27 @@ architecture:
     - bounded stdout and stderr while the child is running
     - renderer process-tree termination on timeout or output overflow
     - path, symlink, and output signature verification before atomic promotion
+  image_ingestion:
+    formats: [PNG, JPEG, PDF]
+    pdf_runtime: pypdfium2 with serialized native access
+    controls:
+      - compressed byte, page count, dimension, and decoded pixel limits
+      - zero-based explicit page selection
+      - optional four-corner perspective correction for rectangular plates
+      - ambiguous uncorrected convex quadrilaterals fail closed
+      - arbitrary closed polygon profiles compile to CadDocument 1.1
+      - source bytes and untrusted filenames are never persisted as job artifacts
+  dxf_ingestion:
+    operations: [auto, extrude, revolve]
+    revolution_signal: exactly one horizontal or vertical CENTER layer or linetype
+    feature_tree_semantics: [profile, extrusion, revolution, circle_hole, linear_pattern, circular_pattern, fillet, chamfer]
+    controls:
+      - parser runs in a bounded one-shot worker
+      - profile must be one closed planar loop or CENTER-closed half-profile
+      - revolution profile must touch and remain on one side of the axis
+      - patterns require at least three equal-radius, equally spaced circles
+      - edge treatments require a globally uniform rounded or chamfered rectangle
+      - HMAC provenance and human confirmation remain mandatory
   async_execution:
     queue: SQLite WAL at data_dir/.queue/promptcad.sqlite3
     job_kinds: [prompt, spec]
@@ -124,7 +145,11 @@ architecture:
       - authentication, TLS, rate limits, tenant quotas, and retention policy
     current_status: single-host hardened worker profile implemented; production multi-tenant policy remains deployment-owned
 accepted_evidence:
-  - 142 pytest tests passed across Phase 1 through Phase 6 with 81 percent app coverage
+  - 180 pytest tests passed with Phase 4 revolution, pattern, and finishing inference
+  - CadQuery emitted and read back a valid profile-revolution STEP
+  - CadQuery, Build123d, FreeCAD, and OpenSCAD revolution sources passed focused tests
+  - 153 pytest tests passed across Phase 1 through Phase 6 with 81 percent app coverage
+  - Selected PDF page and arbitrary polygon image flows passed real CLI and Edge Web acceptance
   - Durable Web and CLI queue flows completed through an independent worker and existing manifest contract
   - Phase 6 code review approved with zero remaining findings
   - 128 pytest tests passed across Phase 1 through Phase 5 with 81 percent app coverage

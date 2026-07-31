@@ -12,7 +12,7 @@
 ## `GET /health`
 
 ```json
-{"status": "ok", "version": "0.5.0"}
+{"status": "ok", "version": "0.7.0"}
 ```
 
 ## `GET /capabilities`
@@ -20,6 +20,8 @@
 回傳規劃器、特徵、格式、圖片／DXF 分析、目前設定，以及完整 `CadBackend` 能力合約 1.0：
 
 - `backends[]`：固定 backend ID、compiler／contract version、execution kind、schema／feature／format 支援、runtime 狀態及 semantic fidelity。
+- `schema_versions` 與 `base_features`：包含 CadDocument 1.2 與 `profile_revolution`。
+- `dxf_operations`：`auto`、`extrude`、`revolve`。
 - `planner_capabilities[]`：planner ID、版本、可用狀態、輸入類型與描述。
 - `async_queue_available` 與 `async_job_kinds`：durable queue 是否可用及目前接受的 `prompt`／`spec` 工作。
 
@@ -134,26 +136,30 @@ promptcad-worker
 
 ## `POST /image-analysis`
 
-以 `multipart/form-data` 上傳校準正俯視 PNG/JPEG。此端點只分析，不建立工作或執行 CAD kernel。
+以 `multipart/form-data` 上傳校準 PNG/JPEG 或 PDF。此端點只分析，不建立工作或執行 CAD kernel。
 
 欄位：
 
-- `image`：PNG/JPEG，實際格式由解碼器判定，不信任檔名或 MIME。
+- `image`：PNG/JPEG/PDF，實際格式由解碼器或 PDF 簽章判定，不信任檔名或 MIME。
 - `known_length_mm`：外框最長邊的實際毫米尺寸。
 - `thickness_mm`：使用者量測或指定的零件厚度。
+- `page_index`：PDF 的零起算頁碼，預設 0；圖片只能使用 0。
+- `perspective_correction`：預設 `false`；只在來源確實為矩形板的凸四角照片時啟用。
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/image-analysis \
   -F "image=@plate-top-view.png" \
   -F "known_length_mm=100" \
-  -F "thickness_mm=5"
+  -F "thickness_mm=5" \
+  -F "page_index=0" \
+  -F "perspective_correction=false"
 ```
 
-成功回傳校準端點、比例、外框、圓孔、信心、可編輯 `feature_tree`、`proposed_spec` 與 validation。`convertible=false` 表示外框或幾何不足以安全轉換；呼叫端不可直接製造。
+成功回傳來源頁面、校準端點、比例、矩形或自由折線外框、圓孔、信心、可編輯 `feature_tree`、`proposed_spec` 與 validation。矩形使用 `CadDocument 1.0 plate`，自由輪廓使用 `CadDocument 1.1 profile_extrusion`。`convertible=false` 表示外框或幾何不足以安全轉換；呼叫端不可直接製造。
 
 ## `POST /image-feature-tree-to-spec`
 
-將人工編輯後的 Feature Tree 重新轉成受控 `CadDocument`。只接受矩形 sketch、extrude、圓 sketch 與成對 through cut，不接受程式碼或自由命令。請將 `/image-analysis` 回傳的完整 `analysis` 原樣帶回；可修改的部分只有獨立的 `feature_tree`。伺服器會驗證分析簽章，防止偽造圖片雜湊、校準或偵測來源。
+將人工編輯後的 Feature Tree 重新轉成受控 `CadDocument`。只接受矩形 sketch 或有限點數的閉合折線 sketch、extrude、圓 sketch與成對 through cut，不接受程式碼或自由命令。請將 `/image-analysis` 回傳的完整 `analysis` 原樣帶回；可修改的部分只有獨立的 `feature_tree`。伺服器會驗證分析簽章，防止偽造圖片／PDF 雜湊、頁面、校準或偵測來源。
 
 ```json
 {
@@ -199,21 +205,23 @@ curl -X POST http://localhost:8000/api/v1/image-analysis \
 以 `multipart/form-data` 上傳受限 2D DXF。此端點只分析，不建立工作或執行 CAD kernel。
 
 - `dxf`：內容以 ASCII／AutoCAD Binary DXF 簽章與 `ezdxf` 實際解析，不信任檔名或 MIME。
-- `thickness_mm`：人工指定的拉伸厚度。
+- `thickness_mm`：人工指定的拉伸厚度；旋轉模式保留欄位但不使用。
 - `unit_override`：`auto`、`mm`、`inch` 或 `cm`；`auto` 只接受 DXF `$INSUNITS` 明確為這三種單位。
+- `operation_mode`：`auto`、`extrude` 或 `revolve`。`auto` 遇到唯一水平／垂直 CENTER layer 或 linetype 時推論旋轉，否則拉伸。
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/dxf-analysis \
   -F "dxf=@plate-two-holes-mm.dxf" \
   -F "thickness_mm=6" \
-  -F "unit_override=auto"
+  -F "unit_override=auto" \
+  -F "operation_mode=auto"
 ```
 
-成功回傳來源與正規化幾何 SHA-256、解析器版本、實體統計、對稱軸、閉合 line／arc 輪廓、圓孔、可編輯 Feature Tree、preview 與 validation。所有結果都要求人工覆核。
+成功回傳來源與正規化幾何 SHA-256、解析器版本、實體統計、對稱軸、閉合 line／arc 輪廓、圓孔／孔陣列、推論操作、CENTER 軸、可忠實還原的一致四角 fillet／chamfer、可編輯 Feature Tree、preview 與 validation。旋轉剖面會正規化為半徑／Z 座標並建立 CadDocument 1.2；斜軸、跨軸、未接觸軸、含孔或完成特徵的旋轉第一切片會 fail closed。所有結果都要求人工覆核。
 
 ## `POST /dxf-feature-tree-to-spec`
 
-Body 為 `/dxf-analysis` 的完整 `analysis` 與獨立、可編輯的 `feature_tree`。伺服器會驗證分析簽章、節點白名單與父子關係，再建立 `CadDocument 1.1 profile_extrusion`。
+Body 為 `/dxf-analysis` 的完整 `analysis` 與獨立、可編輯的 `feature_tree`。伺服器會驗證分析簽章、節點白名單與父子關係，再建立 `CadDocument 1.1 profile_extrusion` 或 `CadDocument 1.2 profile_revolution`；孔陣列在此邊界展開為既有的明確孔特徵。
 
 ## `POST /generate-from-dxf-feature-tree`
 

@@ -109,6 +109,7 @@ class AsyncJobWorker:
                     request.render,
                     request.backend,
                     cancel_check,
+                    drawing_spec=request.drawing_spec,
                 )
             )
         else:

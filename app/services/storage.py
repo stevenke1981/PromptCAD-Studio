@@ -37,8 +37,38 @@ class JobStorage:
             if os.path.exists(temp):
                 os.unlink(temp)
 
+    def write_bytes(
+        self,
+        path: Path,
+        content: bytes,
+        *,
+        overwrite: bool = True,
+    ) -> None:
+        """Atomically persist a binary artifact in the destination directory."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temp = tempfile.mkstemp(prefix=".tmp-", dir=path.parent)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            if overwrite:
+                os.replace(temp, path)
+            else:
+                # Linking a complete, fsynced temporary file is an atomic
+                # create-if-absent operation on the destination filesystem.
+                os.link(temp, path)
+                os.unlink(temp)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
+
     def write_json(self, path: Path, value: Any) -> None:
         self.write_text(path, json.dumps(value, ensure_ascii=False, indent=2))
+
+    def write_json_once(self, path: Path, value: Any) -> None:
+        content = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+        self.write_bytes(path, content, overwrite=False)
 
     def read_manifest(self, job_id: str) -> dict[str, Any] | None:
         path = self.path(job_id) / "manifest.json"

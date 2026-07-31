@@ -13,6 +13,7 @@ from app.models.cad import (
     LBracketBase,
     PlateBase,
     ProfileExtrusionBase,
+    ProfileRevolutionBase,
     RectangularCutoutFeature,
     RingBase,
     SideFace,
@@ -147,6 +148,27 @@ class CadQueryCompiler:
                     )
             lines.append(f"    result = profile.close().extrude({_f(b.thickness)})")
             return lines
+        if isinstance(b, ProfileRevolutionBase):
+            first = b.outer.segments[0].start
+            lines = [
+                f"    profile = cq.Workplane('XZ').moveTo({_f(first.x)}, {_f(first.y)})"
+            ]
+            for segment in b.outer.segments:
+                if segment.kind == "line":
+                    lines.append(
+                        f"    profile = profile.lineTo({_f(segment.end.x)}, {_f(segment.end.y)})"
+                    )
+                else:
+                    lines.append(
+                        "    profile = profile.threePointArc("
+                        f"({_f(segment.mid.x)}, {_f(segment.mid.y)}), "
+                        f"({_f(segment.end.x)}, {_f(segment.end.y)}))"
+                    )
+            lines.append(
+                "    result = profile.close().revolve("
+                "360, axisStart=(0, 0), axisEnd=(0, 1), combine=True, clean=True)"
+            )
+            return lines
         raise TypeError(f"Unsupported base: {type(b)!r}")
 
     @staticmethod
@@ -273,4 +295,7 @@ class CadQueryCompiler:
         if isinstance(b, ProfileExtrusionBase):
             min_x, min_y, max_x, max_y = loop_bounds(b.outer)
             return max(abs(min_x), abs(max_x)), max(abs(min_y), abs(max_y)), b.thickness
+        if isinstance(b, ProfileRevolutionBase):
+            _, _, max_radius, max_z = loop_bounds(b.outer)
+            return max_radius, max_radius, max_z
         return b.length / 2, b.width / 2, b.height

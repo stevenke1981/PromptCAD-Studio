@@ -9,7 +9,7 @@
 ## 信任邊界
 
 - 使用者 Prompt 與手動 DSL：不可信。
-- 使用者上傳圖片／DXF、檔名、MIME、EXIF、DPI 與 Feature Tree：不可信。
+- 使用者上傳圖片／PDF／DXF、檔名、MIME、EXIF、DPI、頁面內容與 Feature Tree：不可信。
 - LLM 回應：不可信，即使 Structured Outputs 驗證成功也只代表格式正確。
 - PromptCAD 的固定 backend registry 與來源編譯器：受信任程式碼。
 - CadQuery／Build123d／OpenSCAD／OpenCascade：高複雜度原生幾何核心，必須限制資源。
@@ -26,6 +26,7 @@
 - 公開部署沒有認證、TLS、速率限制或租戶隔離。
 - 使用者誤把 AI 草案當作可直接加工的正式工程圖。
 - 壓縮圖片解碼造成記憶體／CPU DoS，或錯誤校準產生比例看似合理但實際錯誤的 CAD。
+- 惡意、加密、截斷或超多頁 PDF 嘗試耗盡 native PDF renderer，或利用錯誤頁面／透視假設產生看似合理的 CAD。
 - 惡意 DXF 以 blocks、外部參照、非有限座標、3D OCS、極大量實體或退化圓弧耗盡解析器與驗證資源。
 
 ## 現有控制
@@ -48,11 +49,13 @@
 - `.env`、執行輸出、cache 與憑證不進版本控制或 Docker build context。
 - API 回應與 manifest 不保存 LLM API Key。
 - 圖片路由在 multipart 解析前套用 ASGI request-body 上限；整個請求在解析與讀取前先取得固定併發槽，避免暫存磁碟與等待佇列無界成長。
-- 圖片只允許實際解碼為單 frame PNG/JPEG；在 EXIF transpose／像素載入前先驗證 header 尺寸與總像素，並限制壓縮 bytes、單邊尺寸與分析時間。
+- 圖片只允許實際解碼為單 frame PNG/JPEG；在 EXIF transpose／像素載入前先驗證 header 尺寸與總像素，並限制壓縮 bytes、單邊尺寸與分析時間。PDF 必須具有 `%PDF-` 簽章，並限制總頁數、指定頁碼、光柵單邊與總像素。
+- pypdfium2 的文件開啟、頁面渲染與 native handle teardown 全部在同一 process-wide lock 下序列化；錯誤、加密、截斷或不安全 PDF 只回傳受控分析錯誤。
 - 分析使用固定大小 executor；即使呼叫端逾時，工作完成前仍占用原槽位，不會累積無界背景原生執行緒。
 - 解碼後套用 EXIF orientation 並轉成受控灰階陣列；不信任檔名、MIME、DPI 或 EXIF 尺寸。
 - 原始圖片不寫入 job、artifact 或 ZIP；分析只保存 SHA-256 provenance。
 - 校準保存實際距離、像素端點與 `mm_per_pixel`；角度、對邊平行度與對邊長度不符合矩形條件時不轉 CAD。
+- 任意閉合折線只進入有限點數、唯一點、非零面積的 typed Feature Tree；可能是透視矩形的未校正凸四邊形預設阻擋，透視校正必須由使用者明確啟用且仍標記人工覆核。
 - 伺服器以 HMAC 綁定圖片 SHA-256、尺寸、校準、偵測結果與分析版本；Feature Tree round-trip 及生成時都會驗證 provenance。
 - DXF 路由在 multipart 解析前限制 body 與併發；直接鎖定 `ezdxf`，且只允許有限 modelspace 實體、單一閉合 2D 外框、有限圓孔與明確單位。
 - DXF 解析在一次性 subprocess 執行，使用 `shell=false`、固定 cwd、移除應用 secrets 的環境 allowlist、timeout、固定 stdout 上限及系統暫存區中由父程序擁有的路徑；父程序在成功、錯誤或 timeout 後清理檔案。

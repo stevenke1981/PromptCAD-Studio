@@ -10,6 +10,7 @@ import secrets
 import subprocess
 import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -23,16 +24,20 @@ from app.models.api import (
     FormatResult,
     JobListItem,
     JobManifest,
+    ManufacturingHashBinding,
+    ManufacturingReviewResponse,
     PlanResponse,
 )
 from app.models.cad import CadDocument
 from app.models.dxf import DxfAnalysisResponse, DxfFeatureTreeNode
 from app.models.image import FeatureTreeNode, ImageAnalysisResponse
+from app.models.manufacturing import ManufacturingDrawingSpec, ReviewTransitionRequest
 from app.services.backends import BACKEND_CONTRACT_VERSION, default_backend_registry
 from app.services.cancellation import CancelCheck, JobCancelled
 from app.services.drawing_pdf import EngineeringDrawingPdf
 from app.services.dxf_analysis import DxfAnalysisError, DxfFeatureExtractor
 from app.services.image_analysis import ImageFeatureExtractor
+from app.services.manufacturing import ManufacturingDrawingService
 from app.services.planners.factory import PlannerFactory
 from app.services.preview import SvgPreview
 from app.services.renderer import Renderer
@@ -48,6 +53,7 @@ class JobService:
         self.backends = default_backend_registry()
         self.drawing = EngineeringDrawingPdf()
         self.preview = SvgPreview()
+        self.manufacturing = ManufacturingDrawingService()
         self.storage = JobStorage(settings)
         self.renderer = Renderer(settings)
         self.image_extractor = ImageFeatureExtractor(
@@ -70,6 +76,8 @@ class JobService:
             thread_name_prefix="promptcad-image",
         )
         self._analysis_signing_key = secrets.token_bytes(32)
+        self._manufacturing_locks: dict[str, threading.Lock] = {}
+        self._manufacturing_locks_guard = threading.Lock()
 
     def close(self) -> None:
         self._image_executor.shutdown(wait=False, cancel_futures=True)
@@ -113,10 +121,29 @@ class JobService:
         render: bool,
         backend: str = "auto",
         cancel_check: CancelCheck | None = None,
+        drawing_spec: ManufacturingDrawingSpec | None = None,
     ) -> JobManifest:
         if cancel_check is not None and cancel_check():
             raise JobCancelled("Job cancelled before validation")
         validation = self.validator.validate(spec)
+        if drawing_spec is not None:
+            if not validation.valid:
+                raise ValueError(
+                    "A manufacturing package requires a valid CAD document"
+                )
+            if "pdf" not in formats:
+                raise ValueError(
+                    "A manufacturing package requires pdf in the requested formats"
+                )
+            self.manufacturing.validate_against_cad(spec, drawing_spec)
+            if (
+                self._enum_value(drawing_spec.review_status) != "draft"
+                or drawing_spec.review_version != 0
+                or drawing_spec.review_records
+            ):
+                raise ValueError(
+                    "A new manufacturing package must start as an empty draft at version 0"
+                )
         return await self._materialize(
             spec=spec,
             validation=validation,
@@ -126,6 +153,25 @@ class JobService:
             render=render,
             backend=backend,
             cancel_check=cancel_check,
+            drawing_spec=drawing_spec,
+        )
+
+    def manufacturing_template(
+        self,
+        spec: CadDocument,
+        *,
+        part_number: str | None = None,
+        drawing_number: str | None = None,
+        author: str = "PromptCAD",
+    ) -> ManufacturingDrawingSpec:
+        validation = self.validator.validate(spec)
+        if not validation.valid:
+            raise ValueError("A manufacturing template requires a valid CAD document")
+        return self.manufacturing.create_default(
+            spec,
+            part_number=part_number,
+            drawing_number=drawing_number,
+            author=author,
         )
 
     async def analyze_image(
@@ -218,6 +264,7 @@ class JobService:
         *,
         thickness_mm: float,
         unit_override: str = "auto",
+        operation_mode: str = "auto",
     ) -> DxfAnalysisResponse:
         if len(data) > self.settings.max_dxf_bytes:
             raise ValueError(f"DXF exceeds the {self.settings.max_dxf_bytes} byte limit")
@@ -227,6 +274,7 @@ class JobService:
                 data,
                 thickness_mm=thickness_mm,
                 unit_override=unit_override,
+                operation_mode=operation_mode,
             )
         finally:
             self._dxf_slots.release()
@@ -237,6 +285,7 @@ class JobService:
         *,
         thickness_mm: float,
         unit_override: str = "auto",
+        operation_mode: str = "auto",
     ) -> DxfAnalysisResponse:
         await self._dxf_slots.acquire()
         try:
@@ -249,6 +298,7 @@ class JobService:
                 data,
                 thickness_mm=thickness_mm,
                 unit_override=unit_override,
+                operation_mode=operation_mode,
             )
         finally:
             self._dxf_slots.release()
@@ -259,14 +309,18 @@ class JobService:
         *,
         thickness_mm: float,
         unit_override: str,
+        operation_mode: str,
     ) -> DxfAnalysisResponse:
         if unit_override not in {"auto", "mm", "inch", "cm"}:
             raise ValueError("DXF units must be auto, mm, inch, or cm")
+        if operation_mode not in {"auto", "extrude", "revolve"}:
+            raise ValueError("DXF operation must be auto, extrude, or revolve")
         result = await asyncio.to_thread(
             self._run_dxf_worker,
             data,
             thickness_mm,
             unit_override,
+            operation_mode,
         )
         return self._sign_analysis(result)
 
@@ -275,6 +329,7 @@ class JobService:
         data: bytes,
         thickness_mm: float,
         unit_override: str,
+        operation_mode: str = "auto",
     ) -> DxfAnalysisResponse:
         self.settings.ensure_directories()
         path: Path | None = None
@@ -290,6 +345,7 @@ class JobService:
                 "path": str(path.resolve()),
                 "thickness_mm": thickness_mm,
                 "unit_override": unit_override,
+                "operation_mode": operation_mode,
                 "max_bytes": self.settings.max_dxf_bytes,
                 "max_entities": self.settings.max_dxf_entities,
                 "max_segments": self.settings.max_dxf_segments,
@@ -526,6 +582,7 @@ class JobService:
         formats: list[str],
         render: bool,
         backend: str = "auto",
+        drawing_spec: ManufacturingDrawingSpec | None = None,
         extra_json_artifacts: dict[str, object] | None = None,
         cancel_check: CancelCheck | None = None,
     ) -> JobManifest:
@@ -560,6 +617,11 @@ class JobService:
         spec_sha256 = hashlib.sha256(canonical_spec).hexdigest()
 
         self.storage.write_json(job_dir / "spec.json", spec.model_dump(mode="json"))
+        if drawing_spec is not None:
+            self.storage.write_json(
+                job_dir / "drawing-spec.json",
+                drawing_spec.model_dump(mode="json"),
+            )
         self.storage.write_json(
             job_dir / "validation.json",
             validation.model_dump(mode="json"),
@@ -595,7 +657,16 @@ class JobService:
         except ValueError as exc:
             warnings.append(f"快速預覽已略過：{exc}")
         if "pdf" in formats and validation.valid:
-            self.drawing.write(spec, job_dir / "drawing.pdf")
+            if drawing_spec is None:
+                self.drawing.write(spec, job_dir / "drawing.pdf")
+            else:
+                draft_pdf = self.drawing.render(spec, manufacturing=drawing_spec)
+                self.storage.write_bytes(job_dir / "drawing.pdf", draft_pdf)
+                self._create_manufacturing_review(
+                    job_id,
+                    job_dir,
+                    drawing_spec,
+                )
 
         if not validation.valid:
             status = "failed"
@@ -740,6 +811,316 @@ class JobService:
         )
         self.storage.write_json(job_dir / "manifest.json", manifest.model_dump(mode="json"))
         return manifest
+
+    def _create_manufacturing_review(
+        self,
+        job_id: str,
+        job_dir: Path,
+        drawing_spec: ManufacturingDrawingSpec,
+    ) -> ManufacturingReviewResponse:
+        review_path = job_dir / "manufacturing-review-v000.json"
+        self._require_new_artifacts(review_path)
+        status = self._enum_value(drawing_spec.review_status)
+        version = drawing_spec.review_version
+        if status != "draft" or version != 0 or drawing_spec.review_records:
+            raise ValueError(
+                "A new manufacturing package must start as an empty draft at version 0"
+            )
+        response = ManufacturingReviewResponse(
+            job_id=job_id,
+            version=version,
+            status=status,
+            hashes=ManufacturingHashBinding(
+                spec_sha256=self._sha256_file(job_dir / "spec.json"),
+                drawing_spec_sha256=self._sha256_file(job_dir / "drawing-spec.json"),
+                draft_pdf_sha256=self._sha256_file(job_dir / "drawing.pdf"),
+            ),
+            current_drawing_spec_sha256=self._sha256_file(
+                job_dir / "drawing-spec.json"
+            ),
+            current_pdf_sha256=self._sha256_file(job_dir / "drawing.pdf"),
+            drawing_spec_filename="drawing-spec.json",
+            draft_pdf_filename="drawing.pdf",
+            latest_pdf_filename="drawing.pdf",
+            events=[],
+        )
+        self.storage.write_json_once(review_path, response.model_dump(mode="json"))
+        return response
+
+    def get_manufacturing_review(
+        self,
+        job_id: str,
+        *,
+        verify_integrity: bool = True,
+    ) -> ManufacturingReviewResponse:
+        job_dir = self.storage.path(job_id)
+        if not job_dir.is_dir() or self.get(job_id) is None:
+            raise FileNotFoundError("Job not found")
+        snapshots: dict[int, Path] = {}
+        for path in job_dir.glob("manufacturing-review-v*.json"):
+            suffix = path.name.removeprefix("manufacturing-review-v").removesuffix(
+                ".json"
+            )
+            version_text = suffix.split("-", 1)[0]
+            if not version_text.isdigit():
+                continue
+            version = int(version_text)
+            if version in snapshots:
+                raise RuntimeError(
+                    "Manufacturing review contains duplicate state snapshots"
+                )
+            snapshots[version] = path
+        if not snapshots:
+            raise FileNotFoundError("Manufacturing review not found")
+        version = max(snapshots)
+        try:
+            review = ManufacturingReviewResponse.model_validate_json(
+                snapshots[version].read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("Manufacturing review state is invalid") from exc
+        if review.job_id != job_id or review.version != version:
+            raise RuntimeError("Manufacturing review snapshot provenance mismatch")
+        if any(
+            not (job_dir / f"manufacturing-review-v{item:03d}.json").is_file()
+            for item in range(version + 1)
+        ):
+            raise RuntimeError("Manufacturing review snapshot history is incomplete")
+        if len(review.events) != review.version:
+            raise RuntimeError("Manufacturing review event history is incomplete")
+        if review.events and self._enum_value(review.events[-1].to_status) != review.status:
+            raise RuntimeError("Manufacturing review status does not match its event history")
+        if verify_integrity:
+            self._verify_manufacturing_review(job_dir, review)
+        return review
+
+    def transition_manufacturing_review(
+        self,
+        job_id: str,
+        request: ReviewTransitionRequest,
+    ) -> ManufacturingReviewResponse:
+        lock = self._manufacturing_lock(job_id)
+        with lock:
+            current = self.get_manufacturing_review(job_id)
+            if request.expected_version != current.version:
+                raise RuntimeError(
+                    "Manufacturing review version conflict: "
+                    f"expected {request.expected_version}, current {current.version}"
+                )
+            if current.status in {"approved", "rejected"}:
+                raise RuntimeError(
+                    f"Manufacturing review is terminal in state {current.status}"
+                )
+            action = self._enum_value(request.action)
+            if action == "reject" and not request.note.strip():
+                raise ValueError("A rejection requires a non-empty review note")
+
+            next_version = current.version + 1
+            claim_path = (
+                self.storage.path(job_id)
+                / f"manufacturing-review-v{next_version:03d}.claim"
+            )
+            try:
+                self.storage.write_bytes(
+                    claim_path,
+                    json.dumps(
+                        request.model_dump(mode="json"),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8"),
+                    overwrite=False,
+                )
+            except FileExistsError as exc:
+                raise RuntimeError(
+                    "Manufacturing review version is already being transitioned"
+                ) from exc
+
+            job_dir = self.storage.path(job_id)
+            manifest = self.get(job_id)
+            if manifest is None:
+                raise FileNotFoundError("Job not found")
+            current_spec_path = job_dir / current.drawing_spec_filename
+            try:
+                drawing_spec = ManufacturingDrawingSpec.model_validate_json(
+                    current_spec_path.read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError) as exc:
+                raise RuntimeError("Current manufacturing drawing spec is invalid") from exc
+            completed = False
+            try:
+                updated = self.manufacturing.transition(drawing_spec, request)
+                self.manufacturing.validate_against_cad(manifest.spec, updated)
+                updated_version = updated.review_version
+                updated_status = self._enum_value(updated.review_status)
+                if updated_version != next_version:
+                    raise RuntimeError(
+                        "Manufacturing transition did not advance one version"
+                    )
+                if len(updated.review_records) != len(current.events) + 1:
+                    raise RuntimeError(
+                        "Manufacturing transition did not append exactly one event"
+                    )
+
+                token = secrets.token_hex(6)
+                spec_filename = (
+                    f"drawing-spec-review-v{updated_version:03d}-{token}.json"
+                )
+                pdf_filename = (
+                    f"drawing-review-v{updated_version:03d}-{updated_status}-{token}.pdf"
+                )
+                snapshot_filename = (
+                    f"manufacturing-review-v{updated_version:03d}.json"
+                )
+                spec_path = job_dir / spec_filename
+                pdf_path = job_dir / pdf_filename
+                snapshot_path = job_dir / snapshot_filename
+                self._require_new_artifacts(spec_path, pdf_path, snapshot_path)
+
+                review_summary = {
+                    "status": updated_status,
+                    "version": updated_version,
+                    "event": updated.review_records[-1].model_dump(mode="json"),
+                    "signature_notice": (
+                        "Reviewer labels are self-asserted workflow metadata, not a "
+                        "cryptographic or legal signature."
+                    ),
+                }
+                pdf_bytes = self.drawing.render(
+                    manifest.spec,
+                    manufacturing=updated,
+                    review_summary=review_summary,
+                )
+                self.storage.write_bytes(pdf_path, pdf_bytes, overwrite=False)
+                self.storage.write_json_once(
+                    spec_path,
+                    updated.model_dump(mode="json"),
+                )
+
+                response = ManufacturingReviewResponse(
+                    job_id=job_id,
+                    version=updated_version,
+                    status=updated_status,
+                    hashes=current.hashes,
+                    current_drawing_spec_sha256=self._sha256_file(spec_path),
+                    current_pdf_sha256=self._sha256_file(pdf_path),
+                    drawing_spec_filename=spec_filename,
+                    draft_pdf_filename=current.draft_pdf_filename,
+                    latest_pdf_filename=pdf_filename,
+                    events=updated.review_records,
+                )
+                self.storage.write_json_once(
+                    snapshot_path,
+                    response.model_dump(mode="json"),
+                )
+                completed = True
+                return response
+            finally:
+                if not completed:
+                    claim_path.unlink(missing_ok=True)
+
+    def _verify_manufacturing_review(
+        self,
+        job_dir: Path,
+        review: ManufacturingReviewResponse,
+    ) -> None:
+        expected = {
+            job_dir / "spec.json": review.hashes.spec_sha256,
+            job_dir / "drawing-spec.json": review.hashes.drawing_spec_sha256,
+            job_dir / review.draft_pdf_filename: review.hashes.draft_pdf_sha256,
+            job_dir / review.drawing_spec_filename: review.current_drawing_spec_sha256,
+            job_dir / review.latest_pdf_filename: review.current_pdf_sha256,
+        }
+        for path, expected_hash in expected.items():
+            if not path.is_file() or self._sha256_file(path) != expected_hash:
+                raise RuntimeError(
+                    f"Manufacturing review integrity check failed for {path.name}"
+                )
+        try:
+            drawing_spec = ManufacturingDrawingSpec.model_validate_json(
+                (job_dir / review.drawing_spec_filename).read_text(encoding="utf-8")
+            )
+            cad_document = CadDocument.model_validate_json(
+                (job_dir / "spec.json").read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise RuntimeError("Manufacturing review bound inputs are invalid") from exc
+        self.manufacturing.validate_against_cad(cad_document, drawing_spec)
+        if drawing_spec.review_version != review.version:
+            raise RuntimeError("Manufacturing drawing version does not match review state")
+        if self._enum_value(drawing_spec.review_status) != review.status:
+            raise RuntimeError("Manufacturing drawing status does not match review state")
+        if drawing_spec.review_records != review.events:
+            raise RuntimeError("Manufacturing drawing events do not match review state")
+
+    def manufacturing_review_filenames(self, job_id: str) -> list[str]:
+        """Return only integrity-checked files referenced by the review history."""
+        current = self.get_manufacturing_review(job_id)
+        job_dir = self.storage.path(job_id)
+        filenames = {"drawing-spec.json", current.draft_pdf_filename}
+        for version in range(current.version + 1):
+            snapshot_path = job_dir / f"manufacturing-review-v{version:03d}.json"
+            try:
+                snapshot = ManufacturingReviewResponse.model_validate_json(
+                    snapshot_path.read_text(encoding="utf-8")
+                )
+            except (OSError, ValueError) as exc:
+                raise RuntimeError(
+                    "Manufacturing review history contains an invalid snapshot"
+                ) from exc
+            if (
+                snapshot.job_id != job_id
+                or snapshot.version != version
+                or snapshot.hashes != current.hashes
+                or snapshot.events != current.events[:version]
+            ):
+                raise RuntimeError(
+                    "Manufacturing review history is discontinuous or has mismatched provenance"
+                )
+            if version == 0:
+                expected_status = "draft"
+            else:
+                expected_status = self._enum_value(snapshot.events[-1].to_status)
+            if snapshot.status != expected_status:
+                raise RuntimeError(
+                    "Manufacturing review history contains a status mismatch"
+                )
+            expected_files = {
+                job_dir / snapshot.drawing_spec_filename: (
+                    snapshot.current_drawing_spec_sha256
+                ),
+                job_dir / snapshot.latest_pdf_filename: snapshot.current_pdf_sha256,
+            }
+            for path, expected_hash in expected_files.items():
+                if not path.is_file() or self._sha256_file(path) != expected_hash:
+                    raise RuntimeError(
+                        f"Manufacturing review history integrity failed for {path.name}"
+                    )
+            filenames.update(
+                {
+                    snapshot_path.name,
+                    snapshot.drawing_spec_filename,
+                    snapshot.latest_pdf_filename,
+                }
+            )
+        return sorted(filenames)
+
+    def _manufacturing_lock(self, job_id: str) -> threading.Lock:
+        with self._manufacturing_locks_guard:
+            return self._manufacturing_locks.setdefault(job_id, threading.Lock())
+
+    @staticmethod
+    def _require_new_artifacts(*paths: Path) -> None:
+        existing = [path.name for path in paths if path.exists()]
+        if existing:
+            raise RuntimeError(
+                "Manufacturing review artifacts are append-only; already present: "
+                + ", ".join(existing)
+            )
+
+    @staticmethod
+    def _enum_value(value) -> str:
+        return str(getattr(value, "value", value))
 
     def validate(self, spec: CadDocument):
         return self.validator.validate(spec)

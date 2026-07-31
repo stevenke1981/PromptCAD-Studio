@@ -15,7 +15,7 @@ from app.services.openscad import OpenScadCompiler
 
 BACKEND_CONTRACT_VERSION = "1.0"
 BACKEND_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
-SCHEMA_VERSIONS = ("1.0", "1.1")
+SCHEMA_VERSIONS = ("1.0", "1.1", "1.2")
 BASE_FEATURES = (
     "plate",
     "cylinder",
@@ -23,6 +23,7 @@ BASE_FEATURES = (
     "l_bracket",
     "enclosure",
     "profile_extrusion",
+    "profile_revolution",
 )
 FEATURE_TYPES = (
     "hole",

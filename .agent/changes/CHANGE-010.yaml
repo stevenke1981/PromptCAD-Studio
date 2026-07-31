@@ -1,0 +1,22 @@
+id: CHANGE-010
+type: feature
+risk: high
+objective: Deliver a manufacturing-package vertical slice with typed drawing intent and an immutable review lifecycle.
+scope:
+  - Separate ManufacturingDrawingSpec 1.0 bound to an accepted CadDocument
+  - Typed dimensions and tolerances, datum references, surface finish, BOM, title block, and revision history
+  - Searchable bounded manufacturing PDF while preserving the legacy draft drawing path
+  - Persistent draft to in-review to approved or rejected workflow with optimistic concurrency
+  - Additive review PDFs, hash verification, REST, CLI, and Web operator flows
+protected_behavior:
+  - Existing prompt, image, DXF, edited-spec, backend, and queue flows remain compatible
+  - CadDocument schema and backend compiler contracts are not expanded for drawing-only metadata
+  - Existing drawing.pdf remains available when no manufacturing spec is supplied
+  - Approval is a workflow record and never represented as a cryptographic or legal signature
+acceptance:
+  - A two-hole mounting plate receives typed dimensions, tolerances, datums, Ra, BOM, title block, and revision A
+  - The manufacturing PDF exposes all required schedules as searchable text
+  - submit then approve produces additive review PDFs and persists across service restart
+  - invalid references, stale versions, hash tampering, illegal transitions, and terminal-state changes fail closed
+  - REST, CLI, and Web can complete the same review workflow
+status: in_progress

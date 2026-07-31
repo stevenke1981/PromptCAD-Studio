@@ -1,0 +1,35 @@
+id: CHANGE-008
+type: feature
+risk: medium
+objective: Complete the Phase 3 image, sketch, scan, and PDF-to-CAD vertical slice beyond rectangular top-view images.
+scope:
+  - Selected-page PDF rasterization with bounded bytes, pages, dimensions, and pixels
+  - Arbitrary closed polygon extraction into an editable sketch_profile Feature Tree
+  - CadDocument 1.1 profile_extrusion compilation and round-trip validation
+  - Opt-in four-corner perspective correction for rectangular plates
+  - REST, CLI, and Web page and perspective controls
+  - Source/page provenance, review warnings, and CLI error handling
+protected_behavior:
+  - Existing PNG and JPEG rectangle and circular-hole flow remains compatible
+  - Convex non-rectangular quadrilaterals remain blocked unless perspective correction is explicit
+  - Raw image or PDF bytes and untrusted filenames are not persisted as job artifacts
+  - All candidates still require human confirmation and DesignValidator acceptance before rendering
+acceptance:
+  - A selected page from a multi-page PDF becomes an editable Feature Tree and CAD preview
+  - A non-rectangular closed image contour becomes a CadDocument 1.1 profile extrusion
+  - A trapezoidal view is blocked by default and becomes a rectangle only after explicit correction
+  - PDF page bounds, malformed inputs, duplicate profile points, and native-runtime concurrency are covered
+  - REST, CLI, and Web surfaces expose the same page and correction controls
+status: accepted
+evidence:
+  - 153 pytest tests passed with 81 percent app coverage
+  - Ruff, compileall, and JavaScript syntax passed
+  - pip-audit found no known vulnerabilities in the locked runtime dependency set
+  - Real CLI multi-page PDF analysis returned a plate Feature Tree with page provenance
+  - Edge Web PDF and arbitrary profile flows showed editable Feature Trees and previews with zero console errors
+  - Reviewer approved with zero critical, high, medium, or low findings
+limitations:
+  - A known real-world longest-edge length and thickness are still required
+  - Free image profiles are polygonal; analytic line and arc reconstruction remains Phase 4 work
+  - Occlusion, reflection, multiple parts, OCR scale extraction, and multi-view inference are not automatic
+  - PDFium remains an in-process native boundary protected by strict bounds and serialized access

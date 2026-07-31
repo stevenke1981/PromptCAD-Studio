@@ -1,5 +1,30 @@
 # Release Notes
 
+## v0.7.0 — 2026-07-31
+
+第四階段進階 2D 工程圖推論：
+
+- 新增 CadDocument 1.2 `profile_revolution`，使用半徑／Z 閉合剖面繞全域 Z 軸 360° 旋轉。
+- DXF 可由唯一水平／垂直 CENTER layer 或 linetype 自動推論旋轉，也可由 REST、CLI 與 Web 明確指定 auto／extrude／revolve。
+- 新增線性與圓周等距孔陣列辨識；Feature Tree 保留 pattern 語意，轉 DSL 時安全展開為既有明確孔特徵。
+- 只在能忠實還原為 axis-aligned sharp rectangle 時，將一致四角圓弧或倒角轉為全域 vertical fillet／chamfer；局部或不一致幾何保留原始輪廓。
+- CadQuery、Build123d、FreeCAD Python 與 OpenSCAD 都能產生 deterministic 旋轉來源；SVG preview 與 PDF 三視圖支援旋轉外形。
+- 旋轉第一切片會拒絕斜軸、未接觸軸、跨軸、孔、cutout 與 top-level fillet／chamfer；既有 schema 1.0／1.1 保持相容。
+- 能力 API 公開 schema 1.2、`profile_revolution` 與 DXF operation modes；README、API、Roadmap 與 Web 文案同步。
+- 180 項全專案測試與 Ruff 通過；新增真實 API worker → Feature Tree → generation 垂直測試，以及 CadQuery STEP 實際匯出／回讀。
+
+## v0.6.0 — 2026-07-31
+
+第三階段圖片／草圖轉 CAD 擴充完成：
+
+- 圖片入口新增 PDF 簽章辨識、多頁頁數上限、零起算頁面選擇及受像素／單邊尺寸限制的 pypdfium2 光柵化。
+- PDFium 的開啟、渲染與 native handle teardown 以單一鎖序列化，避免跨分析執行緒重疊使用非 thread-safe runtime。
+- 新增任意閉合折線輪廓擷取與可編輯 `sketch_profile` Feature Tree，編譯為 `CadDocument 1.1 profile_extrusion`。
+- 新增明確啟用的凸四角矩形透視校正；未啟用時，可能是透視矩形的凸四邊形會 fail closed，不會誤當自由輪廓。
+- REST API、Web 與 `promptcad image` 全部支援 PDF 頁面與透視選項；CLI 的檔案、解析、Feature Tree 與輸出錯誤不再顯示 traceback。
+- 新增頁數、頁碼、PDF pixel bound、PDFium 多執行緒序列化、自由輪廓 round-trip、重複點阻擋、API／CLI 選項與安全預設測試。
+- 真實 CLI PDF 分析及 Edge Web PDF／自由輪廓流程通過；Feature Tree、預覽可見且 Console errors 為 0。
+
 ## v0.5.0 — 2026-07-31
 
 第六階段 durable async queue 與隔離 Worker：

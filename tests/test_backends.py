@@ -164,12 +164,15 @@ def test_exact_source_backends_do_not_silently_skip_finishing() -> None:
         document(fillet=True)
     )
 
-    assert diagnostics == []
+    assert len(diagnostics) == 1
+    assert diagnostics[0].backend_id == "openscad"
+    assert diagnostics[0].code == "source_compile_skipped"
     exact = {
         source.backend_id: source.content
         for source in sources
         if source.backend_id in {"cadquery", "build123d", "freecad"}
     }
+    assert set(exact) == {"cadquery", "build123d", "freecad"}
     for content in exact.values():
         assert "fillet 1 skipped" not in content
         assert "fillet {index + 1} skipped" not in content

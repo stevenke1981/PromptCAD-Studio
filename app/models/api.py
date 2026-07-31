@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.cad import CadDocument, ValidationReport
 from app.models.dxf import DxfAnalysisResponse, DxfFeatureTreeNode
 from app.models.image import FeatureTreeNode, ImageAnalysisResponse
+from app.models.manufacturing import ManufacturingDrawingSpec, ReviewRecord
 
 OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 PlannerChoice = Literal["auto", "agent", "rule", "llm"]
@@ -50,6 +51,7 @@ class GenerateRequest(PlanRequest):
 
 class GenerateFromSpecRequest(StrictApiModel):
     spec: CadDocument
+    drawing_spec: ManufacturingDrawingSpec | None = None
     formats: list[OutputFormat] = Field(
         default_factory=default_formats,
         min_length=1,
@@ -57,6 +59,34 @@ class GenerateFromSpecRequest(StrictApiModel):
     )
     render: bool = True
     backend: BackendChoice = "auto"
+
+
+class ManufacturingTemplateRequest(StrictApiModel):
+    spec: CadDocument
+    part_number: str | None = Field(default=None, min_length=1, max_length=80)
+    drawing_number: str | None = Field(default=None, min_length=1, max_length=80)
+    author: str = Field(default="PromptCAD", min_length=1, max_length=120)
+
+
+class ManufacturingHashBinding(StrictApiModel):
+    spec_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    drawing_spec_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    draft_pdf_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ManufacturingReviewResponse(StrictApiModel):
+    schema_version: Literal["1.0"] = "1.0"
+    actor_assurance: Literal["self_asserted"] = "self_asserted"
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    version: int = Field(ge=0)
+    status: Literal["draft", "in_review", "approved", "rejected"]
+    hashes: ManufacturingHashBinding
+    current_drawing_spec_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    current_pdf_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    drawing_spec_filename: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    draft_pdf_filename: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    latest_pdf_filename: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    events: list[ReviewRecord] = Field(default_factory=list, max_length=128)
 
 
 class FeatureTreeToSpecRequest(StrictApiModel):
@@ -197,6 +227,7 @@ class QueueJobResponse(StrictApiModel):
 
 class CapabilityResponse(StrictApiModel):
     planners: list[str]
+    schema_versions: list[str] = Field(default_factory=lambda: ["1.0", "1.1", "1.2"])
     base_features: list[str]
     feature_types: list[str]
     hole_types: list[str]
@@ -210,6 +241,7 @@ class CapabilityResponse(StrictApiModel):
         default_factory=lambda: ["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"]
     )
     dxf_units: list[str] = Field(default_factory=lambda: ["auto", "mm", "inch", "cm"])
+    dxf_operations: list[str] = Field(default_factory=lambda: ["auto", "extrude", "revolve"])
     configured_planner_mode: str
     configured_render_backend: str
     backends: list[BackendCapability] = Field(default_factory=list)

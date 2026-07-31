@@ -31,6 +31,18 @@ const analyzeDxfBtn = $('#analyze-dxf');
 const dxfFileEl = $('#dxf-file');
 const dxfThicknessEl = $('#dxf-thickness');
 const dxfUnitsEl = $('#dxf-units');
+const dxfOperationEl = $('#dxf-operation');
+const manufacturingPanel = $('#manufacturing-panel');
+const manufacturingStatusEl = $('#manufacturing-status');
+const drawingSpecEl = $('#drawing-spec');
+const manufacturingTemplateBtn = $('#manufacturing-template');
+const manufacturingGenerateBtn = $('#manufacturing-generate');
+const reviewActorEl = $('#review-actor');
+const reviewCommentEl = $('#review-comment');
+const reviewSubmitBtn = $('#review-submit');
+const reviewApproveBtn = $('#review-approve');
+const reviewRejectBtn = $('#review-reject');
+const reviewHistoryEl = $('#review-history');
 let activePreviewUrl = null;
 let activeImageHash = null;
 let activeImageAnalysis = null;
@@ -38,6 +50,8 @@ let activeDxfAnalysis = null;
 let activeFeatureSource = null;
 let analysisRequestVersion = 0;
 let activeQueueJobId = null;
+let activeManifestJobId = null;
+let activeManufacturingReview = null;
 let queuePollVersion = 0;
 const ACTIVE_QUEUE_KEY = 'promptcad-active-queue-job';
 
@@ -356,7 +370,9 @@ function showDxfAnalysis(data) {
   activeDxfAnalysis = data;
   activeFeatureSource = 'dxf';
   featureTreePanel.hidden = false;
-  featureTreeSummary.textContent = 'DXF 特徵樹';
+  const operationLabel = data.inferred_operation === 'revolve' ? '旋轉' : '拉伸';
+  const patternLabel = data.patterns?.length ? ` · ${data.patterns.length} 個孔陣列` : '';
+  featureTreeSummary.textContent = `DXF 特徵樹 · ${operationLabel}${patternLabel}`;
   setBadge(data.convertible ? 'REVIEW' : 'BLOCKED', data.convertible ? 'warn' : 'fail');
 
   warningsEl.innerHTML = '';
@@ -389,6 +405,7 @@ function showDxfAnalysis(data) {
 }
 
 function showManifest(data) {
+  activeManifestJobId = data.job_id;
   partName.textContent = data.spec.name;
   deactivateFeatureTree();
   specEl.value = JSON.stringify(data.spec, null, 2);
@@ -429,7 +446,121 @@ function showManifest(data) {
     '全部打包 ZIP',
     `promptcad-${data.job_id}.zip`,
   );
+  manufacturingPanel.hidden = false;
+  void loadManufacturingReview();
 }
+
+function renderManufacturingReview(review) {
+  activeManufacturingReview = review;
+  if (!review) {
+    manufacturingStatusEl.textContent = '尚未建立製造圖工作包';
+    reviewHistoryEl.innerHTML = '';
+    reviewSubmitBtn.disabled = true;
+    reviewApproveBtn.disabled = true;
+    reviewRejectBtn.disabled = true;
+    return;
+  }
+  const labels = {
+    draft: '草稿',
+    in_review: '審查中',
+    approved: '已核准',
+    rejected: '已退回',
+  };
+  manufacturingStatusEl.textContent = `${labels[review.status] || review.status} · 版本 ${review.version}`;
+  reviewSubmitBtn.disabled = review.status !== 'draft';
+  reviewApproveBtn.disabled = review.status !== 'in_review';
+  reviewRejectBtn.disabled = review.status !== 'in_review';
+  reviewHistoryEl.innerHTML = '';
+  for (const event of review.events || []) {
+    const node = document.createElement('div');
+    node.className = 'review-event';
+    node.textContent = `${event.version}. ${event.action} · ${event.reviewer} · ${event.occurred_at}${event.note ? ` · ${event.note}` : ''}`;
+    reviewHistoryEl.appendChild(node);
+  }
+  if (review.latest_pdf_filename) {
+    addDownload(
+      `/api/v1/jobs/${review.job_id}/files/${review.latest_pdf_filename}`,
+      `製造圖 ${labels[review.status] || review.status}`,
+      review.latest_pdf_filename,
+    );
+  }
+}
+
+async function loadManufacturingReview() {
+  if (!activeManifestJobId) return;
+  try {
+    const review = await api(`/api/v1/jobs/${activeManifestJobId}/manufacturing-review`);
+    renderManufacturingReview(review);
+  } catch (error) {
+    if (error.status === 404) {
+      renderManufacturingReview(null);
+      return;
+    }
+    manufacturingStatusEl.textContent = `審查狀態讀取失敗：${error.message}`;
+  }
+}
+
+manufacturingTemplateBtn.addEventListener('click', async () => {
+  try {
+    const spec = JSON.parse(specEl.value);
+    const drawingSpec = await api('/api/v1/manufacturing-template', {
+      method: 'POST',
+      body: JSON.stringify({spec, author: reviewActorEl.value.trim() || 'owner'}),
+    });
+    drawingSpecEl.value = JSON.stringify(drawingSpec, null, 2);
+    manufacturingStatusEl.textContent = '安全預設已建立；請確認尺寸、公差、基準、Ra、BOM 與版本。';
+  } catch (error) {
+    manufacturingStatusEl.textContent = `製造圖規格建立失敗：${error.message}`;
+  }
+});
+
+manufacturingGenerateBtn.addEventListener('click', async () => {
+  try {
+    const spec = JSON.parse(specEl.value);
+    const drawingSpec = JSON.parse(drawingSpecEl.value);
+    const requestedFormats = [...new Set([...formats(), 'pdf'])];
+    const data = await api('/api/v1/generate-from-spec', {
+      method: 'POST',
+      body: JSON.stringify({
+        spec,
+        drawing_spec: drawingSpec,
+        formats: requestedFormats,
+        render: true,
+        backend: backendEl.value,
+      }),
+    });
+    showManifest(data);
+    setStatus('製造圖工作包已建立；可送交審查。');
+  } catch (error) {
+    setStatus(`製造圖工作包建立失敗：${error.message}`, true);
+  }
+});
+
+async function transitionManufacturingReview(action) {
+  if (!activeManifestJobId || !activeManufacturingReview) return;
+  try {
+    const review = await api(
+      `/api/v1/jobs/${activeManifestJobId}/manufacturing-review/transitions`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          action,
+          expected_version: activeManufacturingReview.version,
+          reviewer: reviewActorEl.value.trim() || 'owner',
+          note: reviewCommentEl.value.trim(),
+        }),
+      },
+    );
+    renderManufacturingReview(review);
+    setStatus(`製造圖流程已更新：${review.status}`);
+  } catch (error) {
+    setStatus(`製造圖審查失敗：${error.message}`, true);
+  }
+}
+
+reviewSubmitBtn.addEventListener('click', () => transitionManufacturingReview('submit'));
+reviewApproveBtn.addEventListener('click', () => transitionManufacturingReview('approve'));
+reviewRejectBtn.addEventListener('click', () => transitionManufacturingReview('reject'));
 
 generateBtn.addEventListener('click', async () => {
   const prompt = promptEl.value.trim();
@@ -507,11 +638,11 @@ analyzeImageBtn.addEventListener('click', async () => {
   const thickness = Number(imageThicknessEl.value);
   const pageNumber = Number(imagePageEl.value);
   if (!file) {
-    setStatus('請先選擇 PNG 或 JPEG 圖片。', true);
+    setStatus('請先選擇圖片或 PDF。', true);
     return;
   }
   if (!(knownLength > 0) || !(thickness > 0) || !Number.isInteger(pageNumber) || pageNumber < 1) {
-    setStatus('校準長度與厚度必須大於 0。', true);
+    setStatus('校準長度與厚度必須大於 0，PDF 頁碼必須是正整數。', true);
     return;
   }
 
@@ -566,8 +697,9 @@ analyzeDxfBtn.addEventListener('click', async () => {
   body.append('dxf', file);
   body.append('thickness_mm', String(thickness));
   body.append('unit_override', dxfUnitsEl.value);
+  body.append('operation_mode', dxfOperationEl.value);
   analyzeDxfBtn.disabled = true;
-  setStatus('正在安全讀取 DXF、解析輪廓並建立特徵樹…');
+  setStatus('正在安全讀取 DXF、推論拉伸／旋轉與孔陣列…');
   setBadge('ANALYZING', 'neutral');
   try {
     const data = await api('/api/v1/dxf-analysis', {method: 'POST', body});

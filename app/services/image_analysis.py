@@ -5,6 +5,7 @@ import io
 import math
 import threading
 import warnings
+from contextlib import suppress
 from dataclasses import dataclass
 
 import cv2
@@ -136,8 +137,14 @@ class ImageFeatureExtractor:
         solidity = min(1.0, outer_area / max(hull_area, 1.0))
         approximation_area = abs(float(cv2.contourArea(profile_approx)))
         area_fidelity = min(1.0, approximation_area / max(outer_area, 1.0))
+        ambiguous_perspective_quad = (
+            not perspective_corrected
+            and len(profile_approx) == 4
+            and bool(cv2.isContourConvex(profile_approx))
+        )
         profile_convertible = (
             not rectangular_convertible
+            and not ambiguous_perspective_quad
             and 3 <= len(profile_approx) <= 128
             and solidity >= 0.55
             and area_fidelity >= 0.88
@@ -452,8 +459,8 @@ class ImageFeatureExtractor:
         document = None
         page = None
         bitmap = None
-        try:
-            with _PDFIUM_LOCK:
+        with _PDFIUM_LOCK:
+            try:
                 document = pdfium.PdfDocument(data)
                 page_count = len(document)
                 if page_count < 1:
@@ -472,8 +479,8 @@ class ImageFeatureExtractor:
                     raise ImageAnalysisError("PDF page dimensions are invalid")
                 scale = min(
                     2.0,
-                    self.max_dimension / max(page_width, page_height),
-                    math.sqrt(self.max_pixels / (page_width * page_height)),
+                    (self.max_dimension - 1) / max(page_width, page_height),
+                    math.sqrt((self.max_pixels * 0.98) / (page_width * page_height)),
                 )
                 if not math.isfinite(scale) or scale <= 0:
                     raise ImageAnalysisError("PDF page cannot be rasterized safely")
@@ -483,19 +490,19 @@ class ImageFeatureExtractor:
                     fill_color=(255, 255, 255, 255),
                 )
                 pil_image = bitmap.to_pil().convert("L").copy()
-        except ImageAnalysisError:
-            raise
-        except Exception as exc:
-            raise ImageAnalysisError(
-                "PDF is encrypted, invalid, truncated, or unsafe to render"
-            ) from exc
-        finally:
-            for resource in (bitmap, page, document):
-                if resource is not None:
-                    try:
-                        resource.close()
-                    except Exception:
-                        pass
+            except ImageAnalysisError:
+                raise
+            except Exception as exc:
+                raise ImageAnalysisError(
+                    "PDF is encrypted, invalid, truncated, or unsafe to render"
+                ) from exc
+            finally:
+                # PDFium is not thread-safe. Keep teardown under the same lock as
+                # document rendering so native handles never overlap across jobs.
+                for resource in (bitmap, page, document):
+                    if resource is not None:
+                        with suppress(Exception):
+                            resource.close()
 
         width, height = pil_image.size
         self._validate_dimensions(width, height)

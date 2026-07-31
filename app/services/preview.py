@@ -10,6 +10,7 @@ from app.models.cad import (
     LBracketBase,
     PlateBase,
     ProfileExtrusionBase,
+    ProfileRevolutionBase,
     RingBase,
     SideFace,
 )
@@ -29,6 +30,7 @@ class SvgPreview:
         shapes: list[str] = []
         origin_x, origin_y = 0.0, 0.0
 
+        view_label = "Top preview"
         if isinstance(b, ProfileExtrusionBase):
             min_x, min_y, max_x, max_y = loop_bounds(b.outer)
             origin_x, origin_y = (min_x + max_x) / 2, (min_y + max_y) / 2
@@ -39,6 +41,25 @@ class SvgPreview:
                 for index, (x, y) in enumerate(points)
             )
             shapes.append(f'<path d="{path} Z" class="solid"/>')
+        elif isinstance(b, ProfileRevolutionBase):
+            _, min_z, max_radius, max_z = loop_bounds(b.outer)
+            origin_y = (min_z + max_z) / 2
+            points = loop_polyline(b.outer)
+            for direction in (1, -1):
+                path = " ".join(
+                    f"{'M' if index == 0 else 'L'} "
+                    f"{cx + direction * radius * scale:.2f} "
+                    f"{cy - (z - origin_y) * scale:.2f}"
+                    for index, (radius, z) in enumerate(points)
+                )
+                shapes.append(f'<path d="{path} Z" class="solid"/>')
+            axis_top = cy - (max_z - origin_y) * scale - 8
+            axis_bottom = cy - (min_z - origin_y) * scale + 8
+            shapes.append(
+                f'<line x1="{cx}" y1="{axis_top:.2f}" x2="{cx}" '
+                f'y2="{axis_bottom:.2f}" class="axis"/>'
+            )
+            view_label = "Front revolution silhouette"
         elif isinstance(b, (PlateBase, EnclosureBase, LBracketBase)):
             w, h = dim_x * scale, dim_y * scale
             x, y = cx - w / 2, cy - h / 2
@@ -92,7 +113,7 @@ class SvgPreview:
         dimensions = f"{dim_x:g} × {dim_y:g} mm"
         title = html.escape(doc.name)
         material = html.escape(doc.material.value if doc.material else "unspecified")
-        subtitle = f"Top preview · {dimensions} · material: {material}"
+        subtitle = f"{view_label} · {dimensions} · material: {material}"
         review = "REVIEW REQUIRED" if doc.planner.review_required or doc.assumptions else "PARAMETRIC DRAFT"
 
         return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">
@@ -103,6 +124,7 @@ class SvgPreview:
   .hidden {{ fill:#0b1020; stroke:#64748b; stroke-dasharray:7 6; stroke-width:1.5; }}
   .cut {{ fill:#0b1020; stroke:#f0b36a; stroke-width:2; }}
   .center {{ stroke:#f0b36a; stroke-width:1; stroke-dasharray:4 3; }}
+  .axis {{ stroke:#a9c5ff; stroke-width:1; stroke-dasharray:8 5; }}
   .title {{ fill:#eef4ff; font:700 28px system-ui,sans-serif; }}
   .sub {{ fill:#9fb0cd; font:16px system-ui,sans-serif; }}
   .badge {{ fill:#d7e5ff; font:700 13px system-ui,sans-serif; letter-spacing:1.2px; }}
@@ -137,4 +159,7 @@ class SvgPreview:
         if isinstance(base, ProfileExtrusionBase):
             min_x, min_y, max_x, max_y = loop_bounds(base.outer)
             return max_x - min_x, max_y - min_y
+        if isinstance(base, ProfileRevolutionBase):
+            _, min_z, max_radius, max_z = loop_bounds(base.outer)
+            return 2 * max_radius, max_z - min_z
         return 100, 100

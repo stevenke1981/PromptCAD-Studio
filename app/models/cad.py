@@ -113,13 +113,21 @@ class ProfileExtrusionBase(StrictModel):
     thickness: float = Field(gt=0, le=MAX_DIMENSION_MM)
 
 
+class ProfileRevolutionBase(StrictModel):
+    """A closed radius/Z profile revolved 360 degrees around global Z."""
+
+    kind: Literal["profile_revolution"] = "profile_revolution"
+    outer: ProfileLoop2D
+
+
 BaseFeature = Annotated[
     PlateBase
     | CylinderBase
     | RingBase
     | LBracketBase
     | EnclosureBase
-    | ProfileExtrusionBase,
+    | ProfileExtrusionBase
+    | ProfileRevolutionBase,
     Field(discriminator="kind"),
 ]
 
@@ -221,7 +229,7 @@ class StandardReference(StrictModel):
 
 
 class CadDocument(StrictModel):
-    schema_version: Literal["1.0", "1.1"] = "1.0"
+    schema_version: Literal["1.0", "1.1", "1.2"] = "1.0"
     name: str = Field(default="promptcad-part", min_length=1, max_length=80)
     source_prompt: str = Field(min_length=1, max_length=20_000)
     unit: Literal["mm"] = "mm"
@@ -237,9 +245,24 @@ class CadDocument(StrictModel):
     planner: PlannerMetadata
 
     @model_validator(mode="after")
-    def profile_extrusion_requires_schema_1_1(self) -> CadDocument:
-        if isinstance(self.base, ProfileExtrusionBase) and self.schema_version != "1.1":
-            raise ValueError("profile_extrusion requires schema_version 1.1")
+    def validate_schema_feature_contract(self) -> CadDocument:
+        if (
+            isinstance(self.base, ProfileExtrusionBase)
+            and self.schema_version not in {"1.1", "1.2"}
+        ):
+            raise ValueError("profile_extrusion requires schema_version 1.1 or newer")
+        if isinstance(self.base, ProfileRevolutionBase):
+            if self.schema_version != "1.2":
+                raise ValueError("profile_revolution requires schema_version 1.2")
+            if self.holes or self.cutouts:
+                raise ValueError(
+                    "profile_revolution does not support holes or cutouts in schema 1.2"
+                )
+            if self.fillets or self.chamfers:
+                raise ValueError(
+                    "profile_revolution does not support top-level fillets or chamfers; "
+                    "author corner geometry in the revolution profile"
+                )
         return self
 
 

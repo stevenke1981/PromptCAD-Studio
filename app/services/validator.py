@@ -12,6 +12,7 @@ from app.models.cad import (
     LBracketBase,
     PlateBase,
     ProfileExtrusionBase,
+    ProfileRevolutionBase,
     RingBase,
     SideFace,
     ValidationIssue,
@@ -22,6 +23,7 @@ from app.services.profile_geometry import (
     MAX_VALIDATION_EDGES,
     circle_in_loop,
     is_degenerate,
+    loop_bounds,
     loop_polyline,
     loop_self_intersects,
     loop_signed_area,
@@ -79,7 +81,11 @@ class DesignValidator:
                     message="L 型支架板厚小於 2 mm，承載能力可能不足。",
                 )
             )
-        dimensions = self._dimensions(base)
+        try:
+            dimensions = self._dimensions(base)
+        except ValueError:
+            # Detailed profile geometry diagnostics are emitted by _profile_checks.
+            return
         if min(dimensions) > 0 and max(dimensions) / min(dimensions) > 1000:
             issues.append(
                 ValidationIssue(
@@ -92,8 +98,51 @@ class DesignValidator:
     @staticmethod
     def _profile_checks(doc: CadDocument, issues: list[ValidationIssue]) -> None:
         base = doc.base
-        if not isinstance(base, ProfileExtrusionBase):
+        if not isinstance(base, (ProfileExtrusionBase, ProfileRevolutionBase)):
             return
+
+        if isinstance(base, ProfileRevolutionBase):
+            if doc.holes or doc.cutouts:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_secondary_feature_unsupported",
+                        message="旋轉基體在 schema 1.2 尚不支援孔或切口。",
+                    )
+                )
+
+            authored_points = []
+            for segment in base.outer.segments:
+                authored_points.extend((segment.start, segment.end))
+                if hasattr(segment, "mid"):
+                    authored_points.append(segment.mid)
+            authored_max_radius = max(point.x for point in authored_points)
+            authored_min_z = min(point.y for point in authored_points)
+            authored_max_z = max(point.y for point in authored_points)
+            if authored_max_radius <= 1e-7:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_zero_radius",
+                        message="旋轉輪廓必須產生正半徑。",
+                    )
+                )
+            if authored_max_z - authored_min_z <= 1e-7:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_zero_height",
+                        message="旋轉輪廓必須產生正高度。",
+                    )
+                )
+            if doc.fillets or doc.chamfers:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_edge_feature_unsupported",
+                        message="旋轉基體的圓角與倒角必須直接繪入半徑/Z 輪廓。",
+                    )
+                )
 
         loop = base.outer
         has_invalid_segment = False
@@ -144,6 +193,45 @@ class DesignValidator:
                 )
             )
             return
+        if isinstance(base, ProfileRevolutionBase):
+            try:
+                min_radius, min_z, max_radius, max_z = loop_bounds(loop)
+            except ValueError as exc:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="profile_invalid_bounds",
+                        message=f"旋轉輪廓無法計算有效邊界：{exc}",
+                    )
+                )
+                return
+            if not all(
+                math.isfinite(value)
+                for value in (min_radius, min_z, max_radius, max_z)
+            ):
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_non_finite_bounds",
+                        message="旋轉輪廓必須產生有限的半徑與高度。",
+                    )
+                )
+            if min_radius < -1e-7:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_negative_radius",
+                        message="旋轉輪廓不得跨越全域 Z 旋轉軸（半徑必須為非負值）。",
+                    )
+                )
+            if min_z < -1e-7:
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="revolution_negative_z",
+                        message="旋轉輪廓的 Z 座標必須為非負值。",
+                    )
+                )
         if loop_self_intersects(loop):
             issues.append(
                 ValidationIssue(
@@ -224,6 +312,17 @@ class DesignValidator:
     ) -> None:
         radius = self._effective_diameter(hole) / 2
         base = doc.base
+
+        if isinstance(base, ProfileRevolutionBase):
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="revolution_hole_unsupported",
+                    message="旋轉基體在 schema 1.2 尚不支援孔。",
+                    feature_index=index,
+                )
+            )
+            return
 
         if isinstance(base, ProfileExtrusionBase) and hole.axis != Axis.Z:
             issues.append(
@@ -526,7 +625,7 @@ class DesignValidator:
             return base.height if hole.axis == Axis.Z else base.diameter
         if isinstance(base, RingBase):
             return base.height if hole.axis == Axis.Z else base.outer_diameter
-        if isinstance(base, ProfileExtrusionBase):
+        if isinstance(base, (ProfileExtrusionBase, ProfileRevolutionBase)):
             dim_x, dim_y, dim_z = DesignValidator._dimensions(base)
             return {Axis.X: dim_x, Axis.Y: dim_y, Axis.Z: dim_z}[hole.axis]
         return 1.0
@@ -542,8 +641,9 @@ class DesignValidator:
         if isinstance(base, LBracketBase):
             return base.width, base.depth, base.vertical_height + base.thickness
         if isinstance(base, ProfileExtrusionBase):
-            from app.services.profile_geometry import loop_bounds
-
             min_x, min_y, max_x, max_y = loop_bounds(base.outer)
             return max_x - min_x, max_y - min_y, base.thickness
+        if isinstance(base, ProfileRevolutionBase):
+            min_radius, min_z, max_radius, max_z = loop_bounds(base.outer)
+            return 2 * max_radius, 2 * max_radius, max_z - min_z
         return base.length, base.width, base.height

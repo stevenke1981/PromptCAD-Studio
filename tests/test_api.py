@@ -6,6 +6,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import ezdxf
+
 
 def test_health(client):
     response = client.get("/api/v1/health")
@@ -19,6 +21,8 @@ def test_capabilities_advertise_rectangular_side_cutouts(client):
     assert response.status_code == 200
     assert "rectangular_cutout" in response.json()["feature_types"]
     assert "profile_extrusion" in response.json()["base_features"]
+    assert "profile_revolution" in response.json()["base_features"]
+    assert "1.2" in response.json()["schema_versions"]
     assert response.json()["dxf_entities"] == [
         "LINE",
         "ARC",
@@ -107,6 +111,49 @@ def test_dxf_analysis_review_gate_and_generation(client):
     names = {item["filename"] for item in body["artifacts"]}
     assert {"dxf-analysis.json", "dxf-feature-tree.json"} <= names
     assert all(not name.lower().endswith(".dxf") for name in names)
+
+
+def test_dxf_centerline_revolution_runs_through_worker_and_generation(client):
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 4
+    document.layers.add("CENTER", linetype="CENTER")
+    modelspace = document.modelspace()
+    modelspace.add_line((0, 0), (12, 0))
+    modelspace.add_line((12, 0), (12, 30))
+    modelspace.add_line((12, 30), (0, 30))
+    modelspace.add_line((0, 0), (0, 30), dxfattribs={"layer": "CENTER"})
+    stream = io.StringIO()
+    document.write(stream)
+
+    response = client.post(
+        "/api/v1/dxf-analysis",
+        files={"dxf": ("shaft-profile.dxf", stream.getvalue().encode("ascii"), "image/vnd.dxf")},
+        data={
+            "thickness_mm": "6",
+            "unit_override": "auto",
+            "operation_mode": "auto",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    analysis = response.json()
+    assert analysis["inferred_operation"] == "revolve"
+    assert analysis["entity_counts"]["centerlines"] == 1
+    assert analysis["proposed_spec"]["schema_version"] == "1.2"
+    assert analysis["proposed_spec"]["base"]["kind"] == "profile_revolution"
+
+    generated = client.post(
+        "/api/v1/generate-from-dxf-feature-tree",
+        json={
+            "analysis": analysis,
+            "feature_tree": analysis["feature_tree"],
+            "formats": ["json", "py", "scad", "svg"],
+            "render": False,
+        },
+    )
+
+    assert generated.status_code == 200, generated.text
+    assert generated.json()["spec"]["base"]["kind"] == "profile_revolution"
 
 
 def test_invalid_dxf_never_creates_a_job(client):
@@ -216,7 +263,6 @@ def test_generate_source_only(client):
         "model.freecad.py",
         "model.fusion360.py",
         "model.solidworks.py",
-        "model.scad",
         "preview.svg",
         "drawing.pdf",
     } <= names
@@ -228,7 +274,6 @@ def test_generate_source_only(client):
         "cadquery",
         "build123d",
         "freecad",
-        "openscad",
         "fusion360",
         "solidworks",
     }
@@ -240,6 +285,12 @@ def test_generate_source_only(client):
     assert format_status["json"] == "produced"
     assert format_status["py"] == "produced"
     assert format_status["step"] == "source_only"
+    assert format_status["scad"] == "source_only"
+    assert any(
+        item["backend_id"] == "openscad"
+        and item["code"] == "source_compile_skipped"
+        for item in body["backend_diagnostics"]
+    )
 
     job = client.get(f"/api/v1/jobs/{body['job_id']}")
     assert job.status_code == 200

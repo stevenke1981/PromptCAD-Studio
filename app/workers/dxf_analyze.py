@@ -32,6 +32,7 @@ def main() -> int:
             path,
             thickness_mm=float(request["thickness_mm"]),
             unit_override=request.get("unit_override", "auto"),
+            operation_mode=request.get("operation_mode", "auto"),
             source_data=data,
         )
         output = {"ok": True, "result": result.model_dump(mode="json")}

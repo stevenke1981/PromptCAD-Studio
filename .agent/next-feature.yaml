@@ -1,13 +1,13 @@
 evaluated_at: 2026-07-31
 autonomy: recommend_only
-selected: Manufacturing drawing and approval workflow
+selected: Manufacturing Package MVP
 evidence:
-  - Phase 6 accepted the durable queue, independent worker, cancellation, reload recovery, and hardened single-host container profile.
-  - Existing drawing PDF is an orthographic draft and explicitly lacks tolerances, datums, surface finish, BOM, and manufacturing sign-off.
-  - The original CAD Agent outcome requires outputs that can enter a controlled engineering review process, not only geometry generation.
+  - Phase 4 now supports bounded extrusion or CENTER-axis revolution, linear and circular hole arrays, and conservative global fillet or chamfer inference.
+  - CadDocument 1.2 and four deterministic revolution compilers are accepted with real CadQuery STEP export and readback.
+  - The current drawing PDF remains a review draft without typed tolerances, datums, surface finish, BOM, revision history, or approval state.
 scope_candidate:
-  - Typed drawing metadata for dimensions, datums, tolerances, surface finish, and title block
-  - BOM and revision records for parts and future assemblies
-  - Draft, reviewed, approved, and rejected lifecycle with immutable approval provenance
-  - PDF generation and validation gates that distinguish a draft from approved manufacturing output
-reason_not_implemented: Approval identity, signature policy, tolerance standards, and legal responsibility are product and governance decisions that require the owner's explicit choices.
+  - Separate ManufacturingDrawingSpec 1.0 bound to an immutable CadDocument hash
+  - Typed dimensions and tolerances, datums, surface finish, BOM, title block, and revision history
+  - Draft to in-review to approved or rejected workflow with optimistic concurrency
+  - Additive review PDFs and append-only review evidence without claiming a cryptographic signature
+reason_not_implemented: Recommended as the single next milestone after accepting CHANGE-009; it is a separate workflow and data-contract change.

@@ -20,6 +20,8 @@ from app.models.api import (
     GenerateRequest,
     JobListItem,
     JobManifest,
+    ManufacturingReviewResponse,
+    ManufacturingTemplateRequest,
     PlanRequest,
     PlanResponse,
     QueueJobResponse,
@@ -27,6 +29,10 @@ from app.models.api import (
 from app.models.cad import CadDocument, ValidationReport
 from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
+from app.models.manufacturing import (
+    ManufacturingDrawingSpec,
+    ReviewTransitionRequest,
+)
 from app.services.async_queue import QueueFullError, QueueJobNotFound
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_token)])
@@ -59,7 +65,16 @@ async def capabilities(request: Request):
     settings = request.app.state.settings
     return CapabilityResponse(
         planners=["auto", "agent", "rule", "llm"],
-        base_features=["plate", "cylinder", "ring", "l_bracket", "enclosure", "profile_extrusion"],
+        schema_versions=["1.0", "1.1", "1.2"],
+        base_features=[
+            "plate",
+            "cylinder",
+            "ring",
+            "l_bracket",
+            "enclosure",
+            "profile_extrusion",
+            "profile_revolution",
+        ],
         feature_types=["hole", "rectangular_cutout", "fillet", "chamfer"],
         hole_types=["through", "blind", "clearance", "tapped", "counterbore", "countersink"],
         formats=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
@@ -70,6 +85,7 @@ async def capabilities(request: Request):
         dxf_analysis_available=True,
         dxf_entities=["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"],
         dxf_units=["auto", "mm", "inch", "cm"],
+        dxf_operations=["auto", "extrude", "revolve"],
         configured_planner_mode=settings.planner_mode,
         configured_render_backend=settings.render_backend,
         backends=service.backends.capabilities(),
@@ -107,8 +123,25 @@ async def generate_from_spec(request: Request, body: GenerateFromSpecRequest):
             body.formats,
             body.render,
             body.backend,
+            drawing_spec=body.drawing_spec,
         )
     except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post(
+    "/manufacturing-template",
+    response_model=ManufacturingDrawingSpec,
+)
+async def manufacturing_template(request: Request, body: ManufacturingTemplateRequest):
+    try:
+        return _service(request).manufacturing_template(
+            body.spec,
+            part_number=body.part_number,
+            drawing_number=body.drawing_number,
+            author=body.author,
+        )
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -241,12 +274,14 @@ async def dxf_analysis(
     dxf: Annotated[UploadFile, File()],
     thickness_mm: Annotated[float, Form(gt=0, le=100_000)],
     unit_override: Annotated[Literal["auto", "mm", "inch", "cm"], Form()] = "auto",
+    operation_mode: Annotated[Literal["auto", "extrude", "revolve"], Form()] = "auto",
 ):
     try:
         return await _service(request).analyze_dxf_upload(
             dxf,
             thickness_mm=thickness_mm,
             unit_override=unit_override,
+            operation_mode=operation_mode,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -304,6 +339,47 @@ async def get_job(request: Request, job_id: str):
     return manifest
 
 
+@router.get(
+    "/jobs/{job_id}/manufacturing-review",
+    response_model=ManufacturingReviewResponse,
+)
+async def get_manufacturing_review(request: Request, job_id: str):
+    validate_job_id(job_id)
+    try:
+        return await asyncio.to_thread(
+            _service(request).get_manufacturing_review,
+            job_id,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post(
+    "/jobs/{job_id}/manufacturing-review/transitions",
+    response_model=ManufacturingReviewResponse,
+)
+async def transition_manufacturing_review(
+    request: Request,
+    job_id: str,
+    body: ReviewTransitionRequest,
+):
+    validate_job_id(job_id)
+    try:
+        return await asyncio.to_thread(
+            _service(request).transition_manufacturing_review,
+            job_id,
+            body,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/jobs/{job_id}/files/{filename}")
 async def get_file(request: Request, job_id: str, filename: str):
     validate_job_id(job_id)
@@ -326,6 +402,11 @@ async def bundle(request: Request, job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     filenames = ["manifest.json", *(artifact.filename for artifact in manifest.artifacts)]
+    if (job_dir / "drawing-spec.json").is_file():
+        try:
+            filenames.extend(service.manufacturing_review_filenames(job_id))
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:

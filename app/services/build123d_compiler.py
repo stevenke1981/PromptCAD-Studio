@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from app.models.cad import CadDocument, ProfileExtrusionBase
+from app.models.cad import CadDocument, ProfileExtrusionBase, ProfileRevolutionBase
 from app.services.profile_geometry import loop_bounds
 
 _PAYLOAD_MARKER = "__PROMPTCAD_DOCUMENT_JSON__"
@@ -36,6 +36,7 @@ from build123d import (
     export_stl,
     extrude,
     fillet,
+    revolve,
 )
 
 CAD_SPEC = json.loads(__PROMPTCAD_DOCUMENT_JSON__)
@@ -118,6 +119,29 @@ def _base(spec):
                     )
                 )
         return extrude(Face(Wire(edges)), amount=base["thickness"])
+    if kind == "profile_revolution":
+        # Point2D is (radius, z); author the exact wire in global XZ.
+        edges = []
+        for segment in base["outer"]["segments"]:
+            start = segment["start"]
+            end = segment["end"]
+            if segment["kind"] == "line":
+                edges.append(
+                    Line(
+                        Vector(start["x"], 0, start["y"]),
+                        Vector(end["x"], 0, end["y"]),
+                    )
+                )
+            else:
+                mid = segment["mid"]
+                edges.append(
+                    ThreePointArc(
+                        Vector(start["x"], 0, start["y"]),
+                        Vector(mid["x"], 0, mid["y"]),
+                        Vector(end["x"], 0, end["y"]),
+                    )
+                )
+        return revolve(Face(Wire(edges)), axis=Axis.Z, revolution_arc=360)
     raise ValueError(f"unsupported base kind: {kind}")
 
 
@@ -304,6 +328,9 @@ class Build123dCompiler:
                 max(abs(min_y), abs(max_y)),
                 doc.base.thickness,
             ]
+        elif isinstance(doc.base, ProfileRevolutionBase):
+            _, _, max_radius, max_z = loop_bounds(doc.base.outer)
+            profile_extents = [max_radius, max_radius, max_z]
         extents_payload = json.dumps(profile_extents, separators=(",", ":"))
         return _SCRIPT.replace(
             _PROFILE_EXTENTS_MARKER,

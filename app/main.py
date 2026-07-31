@@ -66,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "/api/v1/plan",
         "/api/v1/generate",
         "/api/v1/generate-from-spec",
+        "/api/v1/manufacturing-template",
         "/api/v1/async/generate",
         "/api/v1/async/generate-from-spec",
         "/api/v1/validate",
@@ -76,6 +77,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             max_body_bytes=settings.max_generate_body_bytes,
             max_concurrency=settings.generate_concurrency,
         )
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        path_prefix="/api/v1/jobs/",
+        path_suffix="/manufacturing-review/transitions",
+        max_body_bytes=settings.max_generate_body_bytes,
+        max_concurrency=settings.generate_concurrency,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import io
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -40,6 +45,22 @@ def trapezoid_png() -> bytes:
     ImageDraw.Draw(image).polygon(((120, 100), (580, 125), (620, 450), (80, 450)), fill=0)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def multipage_plate_pdf() -> bytes:
+    first = Image.open(io.BytesIO(calibrated_plate_png())).convert("RGB")
+    second = Image.new("RGB", (1000, 700), "white")
+    draw = ImageDraw.Draw(second)
+    draw.rectangle((150, 150, 850, 550), fill="black")
+    buffer = io.BytesIO()
+    first.save(
+        buffer,
+        format="PDF",
+        resolution=72,
+        save_all=True,
+        append_images=[second],
+    )
     return buffer.getvalue()
 
 
@@ -99,17 +120,29 @@ def test_jpeg_is_decoded_and_converted(extractor):
     assert len(result.proposed_spec.holes) == 4
 
 
-def test_non_rectangular_profile_is_not_converted(extractor):
+def test_non_rectangular_profile_becomes_editable_profile_extrusion(extractor):
     result = extractor.analyze(
         triangle_png(),
         known_length_mm=100,
         thickness_mm=5,
     )
 
-    assert not result.convertible
-    assert result.outer_profile.shape == "unsupported"
-    assert result.proposed_spec is None
-    assert result.feature_tree == []
+    assert result.convertible
+    assert result.outer_profile.shape == "profile"
+    assert len(result.outer_profile.points_mm) == 3
+    assert result.proposed_spec is not None
+    assert result.proposed_spec.schema_version == "1.1"
+    assert result.proposed_spec.base.kind == "profile_extrusion"
+    assert result.validation is not None and result.validation.valid
+    assert result.feature_tree[0].operation == "sketch_profile"
+
+    rebuilt = extractor.spec_from_feature_tree(
+        result.feature_tree,
+        image_sha256=result.image_sha256,
+    )
+    assert rebuilt.base.kind == "profile_extrusion"
+    assert rebuilt.base.thickness == 5
+    assert len(rebuilt.base.outer.segments) == 3
 
 
 def test_perspective_trapezoid_is_not_converted(extractor):
@@ -121,6 +154,190 @@ def test_perspective_trapezoid_is_not_converted(extractor):
 
     assert not result.convertible
     assert result.outer_profile.shape == "unsupported"
+
+
+def test_opt_in_perspective_correction_rectifies_four_corner_plate(extractor):
+    result = extractor.analyze(
+        trapezoid_png(),
+        known_length_mm=100,
+        thickness_mm=5,
+        perspective_correction=True,
+    )
+
+    assert result.convertible
+    assert result.outer_profile.shape == "rectangle"
+    assert result.outer_profile.perspective_corrected
+    assert result.proposed_spec is not None
+    assert result.proposed_spec.base.kind == "plate"
+    assert any("透視校正" in warning for warning in result.warnings)
+
+
+def test_pdf_page_is_rasterized_with_bounded_page_metadata(extractor):
+    result = extractor.analyze(
+        multipage_plate_pdf(),
+        known_length_mm=100,
+        thickness_mm=5,
+        page_index=0,
+    )
+
+    assert result.convertible
+    assert result.image_format == "PDF"
+    assert result.source_kind == "pdf"
+    assert result.source_page_index == 0
+    assert result.source_page_count == 2
+    assert result.proposed_spec is not None
+    assert result.proposed_spec.base.kind == "plate"
+    assert any("PDF 第 1 頁" in warning for warning in result.warnings)
+
+
+def test_pdf_page_index_is_validated(extractor):
+    with pytest.raises(ImageAnalysisError, match="outside 2 pages"):
+        extractor.analyze(
+            multipage_plate_pdf(),
+            known_length_mm=100,
+            thickness_mm=5,
+            page_index=2,
+        )
+
+
+def test_pdf_page_count_limit_is_enforced():
+    extractor = ImageFeatureExtractor(
+        max_bytes=2_000_000,
+        max_pixels=2_000_000,
+        max_dimension=2048,
+        max_pdf_pages=1,
+    )
+
+    with pytest.raises(ImageAnalysisError, match="exceeds the 1 page limit"):
+        extractor.analyze(
+            multipage_plate_pdf(),
+            known_length_mm=100,
+            thickness_mm=5,
+        )
+
+
+def test_pdfium_analysis_is_stable_across_threads(extractor):
+    data = multipage_plate_pdf()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(
+            pool.map(
+                lambda _: extractor.analyze(
+                    data,
+                    known_length_mm=100,
+                    thickness_mm=5,
+                ),
+                range(4),
+            )
+        )
+
+    assert all(result.convertible for result in results)
+    assert len({result.image_sha256 for result in results}) == 1
+
+
+def test_pdfium_open_render_and_teardown_share_one_serial_lock(extractor):
+    class CallTracker:
+        def __init__(self) -> None:
+            self._guard = threading.Lock()
+            self.active = 0
+            self.peak = 0
+
+        def touch(self) -> None:
+            with self._guard:
+                self.active += 1
+                self.peak = max(self.peak, self.active)
+            time.sleep(0.005)
+            with self._guard:
+                self.active -= 1
+
+    tracker = CallTracker()
+
+    class FakeBitmap:
+        def to_pil(self):
+            tracker.touch()
+            image = Image.new("L", (200, 120), 255)
+            ImageDraw.Draw(image).rectangle((20, 20, 180, 100), fill=0)
+            return image
+
+        def close(self) -> None:
+            tracker.touch()
+
+    class FakePage:
+        def get_size(self):
+            tracker.touch()
+            return (100.0, 60.0)
+
+        def render(self, **_kwargs):
+            tracker.touch()
+            return FakeBitmap()
+
+        def close(self) -> None:
+            tracker.touch()
+
+    class FakeDocument:
+        def __init__(self, _data) -> None:
+            tracker.touch()
+
+        def __len__(self) -> int:
+            tracker.touch()
+            return 1
+
+        def __getitem__(self, _index: int):
+            tracker.touch()
+            return FakePage()
+
+        def close(self) -> None:
+            tracker.touch()
+
+    start = threading.Barrier(4)
+
+    def analyze(_index: int):
+        start.wait(timeout=2)
+        return extractor.analyze(
+            b"%PDF-controlled",
+            known_length_mm=100,
+            thickness_mm=5,
+        )
+
+    fake_pdfium = SimpleNamespace(PdfDocument=FakeDocument)
+    with (
+        patch.dict(sys.modules, {"pypdfium2": fake_pdfium}),
+        ThreadPoolExecutor(max_workers=4) as pool,
+    ):
+        results = list(pool.map(analyze, range(4)))
+
+    assert all(result.convertible for result in results)
+    assert tracker.peak == 1
+
+
+def test_pdf_upload_api_accepts_page_selection(client):
+    response = client.post(
+        "/api/v1/image-analysis",
+        files={"image": ("drawing.pdf", multipage_plate_pdf(), "application/pdf")},
+        data={"known_length_mm": "100", "thickness_mm": "5", "page_index": "0"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["convertible"] is True
+    assert body["source_kind"] == "pdf"
+    assert body["source_page_index"] == 0
+    assert body["source_page_count"] == 2
+
+
+def test_duplicate_free_profile_points_are_rejected(extractor):
+    analysis = extractor.analyze(
+        triangle_png(),
+        known_length_mm=100,
+        thickness_mm=5,
+    )
+    tree = [node.model_copy(deep=True) for node in analysis.feature_tree]
+    tree[0].points[1] = tree[0].points[0]
+
+    with pytest.raises(ImageAnalysisError, match="must be unique"):
+        extractor.spec_from_feature_tree(
+            tree,
+            image_sha256=analysis.image_sha256,
+        )
 
 
 def test_dimension_limit_is_checked_before_exif_transpose(extractor):
@@ -237,6 +454,23 @@ def test_tampered_image_provenance_is_rejected(client):
         data={"known_length_mm": "100", "thickness_mm": "5"},
     ).json()
     analysis["image_sha256"] = "0" * 64
+
+    response = client.post(
+        "/api/v1/image-feature-tree-to-spec",
+        json={"analysis": analysis, "feature_tree": analysis["feature_tree"]},
+    )
+
+    assert response.status_code == 422
+    assert "provenance" in response.json()["detail"]
+
+
+def test_tampered_pdf_page_provenance_is_rejected(client):
+    analysis = client.post(
+        "/api/v1/image-analysis",
+        files={"image": ("drawing.pdf", multipage_plate_pdf(), "application/pdf")},
+        data={"known_length_mm": "100", "thickness_mm": "5", "page_index": "0"},
+    ).json()
+    analysis["source_page_index"] = 1
 
     response = client.post(
         "/api/v1/image-feature-tree-to-spec",

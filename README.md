@@ -5,8 +5,8 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 ```text
 提示詞
   → 標準件 CAD Agent／本地規則／OpenAI-compatible LLM 規劃器
-圖片／草圖
-  → 安全解碼／已知長度校準／輪廓與圓孔擷取／可編輯 Feature Tree
+圖片／草圖／PDF
+  → 安全解碼／頁面選擇／已知長度校準／可選透視校正／輪廓與圓孔擷取／可編輯 Feature Tree
 DXF
   → 隔離解析／線與三點圓弧輪廓／圓孔／對稱判斷／可編輯 Feature Tree
   → 受控 CadDocument 1.0／1.1 DSL
@@ -16,14 +16,14 @@ DXF
   → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
 ```
 
-目前版本 v0.5.0 是可直接執行的 CAD Agent 平台，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
+目前版本 v0.7.0 是可直接執行的 CAD Agent 平台，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼，也可將校準圖片、草圖、指定 PDF 頁面或受限 DXF 轉成可編輯 Feature Tree。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
 
 ## 已包含
 
 - 中文／英文提示詞本地解析，沒有 API Key 也能使用。
 - 標準件 CAD Agent：辨識 NEMA17 並帶入有來源、可覆寫的馬達面尺寸與支架參數。
-- 校準圖片轉 CAD：正俯視 PNG/JPEG 擷取矩形外框與圓孔，產生信心分數、可編輯 Feature Tree、CAD DSL 與完整工程輸出。
-- 受限 DXF 工程圖轉 3D：單一閉合 LINE／ARC／LWPOLYLINE／2D POLYLINE 外框與 CIRCLE 圓孔，經人工確認後拉伸成完整 CAD 輸出。
+- 校準圖片／PDF 轉 CAD：PNG/JPEG 或指定 PDF 頁面可擷取矩形、任意閉合折線輪廓與圓孔；矩形照片可明確啟用四點透視校正，並產生信心分數、可編輯 Feature Tree、CAD DSL 與完整工程輸出。
+- 受限 DXF 工程圖轉 3D：閉合 LINE／ARC／LWPOLYLINE／2D POLYLINE 外框、CIRCLE 圓孔、CENTER 旋轉軸、線性／圓周孔陣列及一致四角圓角／倒角，經人工確認後拉伸或旋轉成完整 CAD 輸出。
 - OpenAI-compatible LLM 規劃器，支援 `json_schema`、`json_object` 與純提示 JSON 模式。
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
 - 基礎幾何：板件、圓柱、圓環、L 型支架、開口外殼。
@@ -145,12 +145,13 @@ promptcad generate "NEMA17 馬達支架，板厚5mm，支架寬70mm" --planner a
 
 ### 圖片／草圖轉 CAD
 
-Web UI 可上傳高對比、單一零件的正俯視 PNG/JPEG，輸入外框最長邊實際尺寸與厚度後，系統會：
+Web UI 可上傳高對比、單一零件的 PNG/JPEG 或 PDF，選擇頁面並輸入外框最長邊實際尺寸與厚度後，系統會：
 
 1. 移除 EXIF 方向差異並限制壓縮大小、像素及影像尺寸。
-2. 偵測矩形外框與圓孔，記錄校準端點、`mm_per_pixel`、信心及影像雜湊。
-3. 產生可編輯 Feature Tree；人工確認後才轉入既有驗證與 CAD renderer。
-4. 非矩形、低信心或無法安全解釋的影像只回傳候選與警告，不會直接建立製造輸出。
+2. 對 PDF 套用頁數與像素上限後光柵化指定頁面；需要時由使用者明確啟用四角矩形透視校正。
+3. 偵測矩形或任意閉合折線外框與圓孔，記錄校準端點、`mm_per_pixel`、信心及來源雜湊。
+4. 產生可編輯 Feature Tree；人工確認後才轉入既有驗證與 CAD renderer。
+5. 低信心、不閉合或無法安全解釋的影像只回傳候選與警告，不會直接建立製造輸出。
 
 CLI：
 
@@ -158,6 +159,11 @@ CLI：
 promptcad image examples/image-to-cad/plate-top-view.png `
   --known-length 100 --thickness 5 `
   --analysis-output examples/generated/image-to-cad/image-analysis.json
+
+# PDF 頁碼採零起算；矩形照片只有明確指定時才做透視校正
+promptcad image drawing.pdf --page 0 `
+  --known-length 100 --thickness 5 `
+  --perspective-correction
 
 # 編輯 image-analysis.json 內的 feature_tree 後，再以同一張原圖確認輸出
 promptcad image examples/image-to-cad/plate-top-view.png `
@@ -172,7 +178,7 @@ CLI 會重新分析原圖並比對 SHA-256；只有來源相符的已編輯 Feat
 
 ### DXF 工程圖轉 3D
 
-Web UI 可上傳 DXF，指定厚度與單位後查看解析出的閉合輪廓、圓孔、對稱性與 Feature Tree。原始 DXF 不會保存到工作或 ZIP；只有人工確認的 Feature Tree、來源雜湊、DSL 與 CAD 產物會留下。
+Web UI 可上傳 DXF，指定單位及自動／拉伸／旋轉模式後查看解析出的閉合輪廓、圓孔陣列、CENTER 軸、對稱性與 Feature Tree。自動模式遇到唯一水平或垂直 CENTER 線時，會把半剖面正規化成半徑／Z 輪廓並建立 360° 旋轉體；否則使用指定厚度拉伸。原始 DXF 不會保存到工作或 ZIP；只有人工確認的 Feature Tree、來源雜湊、DSL 與 CAD 產物會留下。
 
 ```powershell
 promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf `
@@ -186,7 +192,7 @@ promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf `
   --confirm
 ```
 
-目前會拒絕 blocks／INSERT、SPLINE、HATCH、ELLIPSE、非 WCS +Z、3D、高複雜度、多重或開放輪廓。無單位 DXF 必須用 `--units mm|inch|cm` 明確指定。
+目前會拒絕 blocks／INSERT、SPLINE、HATCH、ELLIPSE、非 WCS +Z、3D、高複雜度、多重或開放輪廓。旋轉第一切片會拒絕斜 CENTER 線、跨軸剖面、圓孔與次要完成特徵；無單位 DXF 必須用 `--units mm|inch|cm` 明確指定。CLI 可用 `--operation auto|extrude|revolve` 控制推論。
 
 線／圓弧與四孔的完整 STEP、STL、DXF、SVG、PDF、Python、SCAD、JSON 驗收包位於 [`examples/generated/dxf-to-cad`](examples/generated/dxf-to-cad)。
 
@@ -357,8 +363,8 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 3. 規則解析器偏向常見單一零件、單一孔群與單一矩形側面開口；複雜多段輪廓、多孔群、裝配與自由曲面應使用 LLM 規劃器或直接編輯 DSL。
 4. `preview.svg` 是快速預覽，不是 CAD kernel 的 BREP 渲染結果。
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
-6. 圖片 MVP 僅支援校準後的高對比正俯視矩形板與圓孔；厚度必須輸入。透視、反光、遮擋、任意輪廓與多零件照片會停止自動轉換。
-7. DXF 垂直切片僅支援 modelspace 中一個閉合 2D 外框與 Z 軸圓孔的拉伸；側向孔、PDF、多視圖、旋轉、陣列、倒角與圓角推理仍屬後續工作。過大而無法在安全取樣上限內維持 0.5 mm 弦長精度的圓弧會停止轉換。
+6. 圖片流程支援校準後的高對比矩形、自由閉合折線、圓孔、指定 PDF 頁面與明確啟用的矩形透視校正；厚度仍必須輸入。反光、遮擋、多零件、無比例或線／圓弧輪廓仍需人工處理。
+7. DXF 垂直切片支援 modelspace 中一個閉合 2D 外框的拉伸或 CENTER 半剖面旋轉、Z 軸圓孔與規則孔陣列；只會把可忠實還原的全域一致四角圓角／倒角轉成完成特徵。側向孔、工程圖 PDF、多視圖配對、尺寸註記與局部完成特徵仍屬後續工作。過大而無法在安全取樣上限內維持 0.5 mm 弦長精度的圓弧會停止轉換。
 8. FreeCAD 來源已通過語法、確定性與 conformance 測試，但本機尚未在 FreeCAD host runtime 實際執行；不得把 source export 解讀為 host runtime 驗收。
 9. Fusion 360／SOLIDWORKS 沒有伺服器端執行能力，也沒有授權桌面主程式的端到端驗收；adapter 只處理同工作包的中性 STEP。
 10. `docker-compose.sandboxed.yml` 提供可執行的單機 OS 隔離基線，但不是完整多租戶平台；正式公開部署仍需 TLS、帳號授權、租戶配額、保留政策、集中式 queue／database，以及平台核准的 seccomp／AppArmor 或等效政策。本機沒有 Docker executable，因此此 Compose profile 仍需在 Docker 主機做最終啟動驗收。
@@ -373,7 +379,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前 142 項測試與 81% app 覆蓋率涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP、六後端 conformance，以及 queue 原子 claim、lease 復原、損壞 payload、取消競態、程序樹終止、REST／CLI／Worker 背景流程。
+目前 180 項測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片／多頁 PDF 安全解碼與校準、透視校正、自由輪廓、DXF 格式／單位／2D／複雜度防線、CENTER 旋轉、孔陣列、圓角／倒角推論、四種旋轉來源編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP、六後端 conformance，以及 queue 原子 claim、lease 復原、損壞 payload、取消競態、程序樹終止、REST／CLI／Worker 背景流程。
 
 Build123d 已在獨立環境實際驗收：有效的 80×40×5 mm STEP，包含兩個半徑 3.3 mm 的圓柱孔面。CadQuery 與 Build123d 的 OCP 相依衝突，因此此結果來自分離的 venv。
 
