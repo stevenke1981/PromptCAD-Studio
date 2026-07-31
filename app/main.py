@@ -48,6 +48,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_body_bytes=settings.max_dxf_bytes + 131_072,
         max_concurrency=settings.dxf_analysis_concurrency,
     )
+    for feature_tree_path in (
+        "/api/v1/image-feature-tree-to-spec",
+        "/api/v1/generate-from-image-feature-tree",
+        "/api/v1/dxf-feature-tree-to-spec",
+        "/api/v1/generate-from-dxf-feature-tree",
+    ):
+        app.add_middleware(
+            RequestBodyLimitMiddleware,
+            path=feature_tree_path,
+            max_body_bytes=settings.max_feature_tree_body_bytes,
+            max_concurrency=settings.feature_tree_concurrency,
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

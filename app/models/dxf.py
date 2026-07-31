@@ -72,8 +72,8 @@ class DxfAnalysisResponse(StrictModel):
     provenance: DxfProvenance
     entity_counts: DxfEntityCounts
     outer_profile: ProfileLoop2D
-    holes: list[DxfCircleHole] = Field(default_factory=list, max_length=256)
-    feature_tree: list[DxfFeatureTreeNode] = Field(default_factory=list, max_length=260)
+    holes: list[DxfCircleHole] = Field(default_factory=list, max_length=64)
+    feature_tree: list[DxfFeatureTreeNode] = Field(default_factory=list, max_length=66)
     symmetry: DxfSymmetry
     analysis_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     review_required: bool = True

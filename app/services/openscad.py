@@ -13,7 +13,7 @@ from app.models.cad import (
     RingBase,
     SideFace,
 )
-from app.services.profile_geometry import loop_bounds, loop_polyline
+from app.services.profile_geometry import ARC_MAX_SEGMENTS, loop_bounds, loop_polyline
 
 
 def _f(value: float) -> str:
@@ -193,7 +193,8 @@ class OpenScadCompiler:
             points = loop_polyline(b.outer)
             point_list = ", ".join(f"[{_f(x)}, {_f(y)}]" for x, y in points[:-1])
             return [
-                f"{indent}// Profile arcs are tessellated with at most 96 segments per arc.",
+                f"{indent}// Profile arcs are tessellated with at most "
+                f"{ARC_MAX_SEGMENTS} segments per arc.",
                 f"{indent}linear_extrude(height={_f(b.thickness)}) polygon(points=[{point_list}]);",
             ]
         raise TypeError(type(b))

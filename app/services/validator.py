@@ -122,7 +122,18 @@ class DesignValidator:
 
         if has_invalid_segment:
             return
-        if len(loop_polyline(loop)) - 1 > MAX_VALIDATION_EDGES:
+        try:
+            tessellated = loop_polyline(loop)
+        except ValueError as exc:
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="profile_tessellation_limit",
+                    message=f"外框圓弧無法在安全取樣上限內達到精度要求：{exc}",
+                )
+            )
+            return
+        if len(tessellated) - 1 > MAX_VALIDATION_EDGES:
             issues.append(
                 ValidationIssue(
                     severity=ValidationSeverity.ERROR,
@@ -214,8 +225,23 @@ class DesignValidator:
         radius = self._effective_diameter(hole) / 2
         base = doc.base
 
+        if isinstance(base, ProfileExtrusionBase) and hole.axis != Axis.Z:
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="profile_side_hole_unsupported",
+                    message=f"自由外框目前不支援 {hole.axis.value.upper()} 軸側向孔。",
+                    feature_index=index,
+                )
+            )
+            return
+
         if hole.axis == Axis.Z and isinstance(base, ProfileExtrusionBase):
-            if not circle_in_loop((hole.x, hole.y), radius, base.outer):
+            try:
+                contained = circle_in_loop((hole.x, hole.y), radius, base.outer)
+            except ValueError:
+                return
+            if not contained:
                 issues.append(
                     ValidationIssue(
                         severity=ValidationSeverity.ERROR,

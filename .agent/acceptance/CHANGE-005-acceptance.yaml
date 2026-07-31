@@ -6,8 +6,8 @@ critical_flows: PASS
 visible_result: PASS
 critical_errors: NONE
 evidence:
-  tests: 79 passed
-  coverage: 82 percent
+  tests: 85 passed
+  coverage: 81 percent
   lint: Ruff passed
   compile: compileall passed
   dependency_audit: no known vulnerabilities

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from app.models.cad import (
     ArcSegment2D,
+    Axis,
     CadDocument,
     EnclosureBase,
     HoleFeature,
@@ -14,7 +17,7 @@ from app.models.cad import (
     RectangularCutoutFeature,
     SideFace,
 )
-from app.services.profile_geometry import ARC_MAX_SEGMENTS, loop_polyline
+from app.services.profile_geometry import loop_polyline
 from app.services.validator import DesignValidator
 
 
@@ -180,6 +183,16 @@ def test_profile_loop_reports_discontinuous_self_crossing_and_zero_area_geometry
             LineSegment2D(start=Point2D(x=20, y=0), end=Point2D(x=0, y=0)),
         ]
     )
+    touching_loops = profile_document(
+        segments=[
+            LineSegment2D(start=Point2D(x=0, y=0), end=Point2D(x=10, y=0)),
+            LineSegment2D(start=Point2D(x=10, y=0), end=Point2D(x=5, y=10)),
+            LineSegment2D(start=Point2D(x=5, y=10), end=Point2D(x=0, y=0)),
+            LineSegment2D(start=Point2D(x=0, y=0), end=Point2D(x=-10, y=0)),
+            LineSegment2D(start=Point2D(x=-10, y=0), end=Point2D(x=-5, y=10)),
+            LineSegment2D(start=Point2D(x=-5, y=10), end=Point2D(x=0, y=0)),
+        ]
+    )
 
     assert any(
         issue.code == "profile_not_continuous"
@@ -192,6 +205,10 @@ def test_profile_loop_reports_discontinuous_self_crossing_and_zero_area_geometry
     assert any(
         issue.code == "profile_zero_area"
         for issue in DesignValidator().validate(zero_area).issues
+    )
+    assert any(
+        issue.code == "profile_self_intersection"
+        for issue in DesignValidator().validate(touching_loops).issues
     )
 
 
@@ -216,4 +233,19 @@ def test_large_profile_arc_tessellation_has_a_hard_upper_bound():
         ]
     )
 
-    assert len(loop_polyline(doc.base.outer)) <= ARC_MAX_SEGMENTS + 2
+    with pytest.raises(ValueError, match="tessellation tolerance"):
+        loop_polyline(doc.base.outer)
+    report = DesignValidator().validate(doc)
+    assert not report.valid
+    assert any(issue.code == "profile_tessellation_limit" for issue in report.issues)
+
+
+def test_profile_extrusion_rejects_side_axis_holes_until_supported():
+    report = DesignValidator().validate(
+        profile_document(
+            holes=[HoleFeature(x=0, y=0, z=2.5, axis=Axis.X, diameter=3)]
+        )
+    )
+
+    assert not report.valid
+    assert any(issue.code == "profile_side_hole_unsupported" for issue in report.issues)

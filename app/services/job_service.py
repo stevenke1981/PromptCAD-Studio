@@ -502,7 +502,10 @@ class JobService:
             validation.model_dump(mode="json"),
         )
         self.storage.write_text(job_dir / "model.py", self.compiler.compile(spec))
-        self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
+        try:
+            self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
+        except ValueError as exc:
+            warnings.append(f"OpenSCAD 原始碼已略過：{exc}")
         for filename, payload in (extra_json_artifacts or {}).items():
             if filename not in {
                 "image-analysis.json",
@@ -512,7 +515,10 @@ class JobService:
             }:
                 raise ValueError("Unsupported internal JSON artifact")
             self.storage.write_json(job_dir / filename, payload)
-        self.preview.write(spec, job_dir / "preview.svg")
+        try:
+            self.preview.write(spec, job_dir / "preview.svg")
+        except ValueError as exc:
+            warnings.append(f"快速預覽已略過：{exc}")
         if "pdf" in formats and validation.valid:
             self.drawing.write(spec, job_dir / "drawing.pdf")
 

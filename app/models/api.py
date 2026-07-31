@@ -62,7 +62,7 @@ class GenerateFromImageFeatureTreeRequest(StrictApiModel):
 
 class DxfFeatureTreeToSpecRequest(StrictApiModel):
     analysis: DxfAnalysisResponse
-    feature_tree: list[DxfFeatureTreeNode] = Field(min_length=2, max_length=260)
+    feature_tree: list[DxfFeatureTreeNode] = Field(min_length=2, max_length=66)
 
 
 class GenerateFromDxfFeatureTreeRequest(DxfFeatureTreeToSpecRequest):

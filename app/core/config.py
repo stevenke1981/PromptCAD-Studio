@@ -36,10 +36,12 @@ class Settings(BaseSettings):
     image_analysis_concurrency: int = Field(default=2, ge=1, le=8)
     max_dxf_bytes: int = Field(default=5_000_000, ge=10_000, le=25_000_000)
     max_dxf_entities: int = Field(default=2_000, ge=8, le=50_000)
-    max_dxf_segments: int = Field(default=256, ge=8, le=2_000)
-    max_dxf_holes: int = Field(default=64, ge=0, le=256)
+    max_dxf_segments: int = Field(default=256, ge=8, le=512)
+    max_dxf_holes: int = Field(default=64, ge=0, le=64)
     dxf_analysis_timeout_seconds: int = Field(default=20, ge=2, le=120)
     dxf_analysis_concurrency: int = Field(default=2, ge=1, le=8)
+    max_feature_tree_body_bytes: int = Field(default=1_000_000, ge=10_000, le=5_000_000)
+    feature_tree_concurrency: int = Field(default=4, ge=1, le=16)
 
     api_token: str | None = None
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000"

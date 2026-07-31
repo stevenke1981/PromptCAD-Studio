@@ -15,7 +15,7 @@ from app.models.cad import ArcSegment2D, LineSegment2D, Point2D, ProfileLoop2D
 EPSILON = 1e-7
 ARC_MAX_CHORD_MM = 0.5
 ARC_MAX_ANGLE_RAD = math.radians(5)
-ARC_MAX_SEGMENTS = 96
+ARC_MAX_SEGMENTS = 256
 MAX_VALIDATION_EDGES = 2_048
 
 Point = tuple[float, float]
@@ -80,7 +80,12 @@ def approximate_arc(
         math.ceil(abs(sweep) / ARC_MAX_ANGLE_RAD),
         math.ceil(abs(sweep) * radius / max_chord_mm),
     )
-    segments = min(requested_segments, ARC_MAX_SEGMENTS)
+    if requested_segments > ARC_MAX_SEGMENTS:
+        raise ValueError(
+            f"arc needs {requested_segments} segments to satisfy the tessellation tolerance; "
+            f"limit is {ARC_MAX_SEGMENTS}"
+        )
+    segments = requested_segments
     return [
         (
             center[0] + radius * math.cos(start_angle + sweep * index / segments),
@@ -171,17 +176,35 @@ def point_in_loop(point: Point, loop: ProfileLoop2D) -> bool:
     return inside
 
 
-def circle_in_loop(center: Point, radius: float, loop: ProfileLoop2D) -> bool:
-    return all(
-        point_in_loop(
-            (
-                center[0] + radius * math.cos(math.tau * index / 32),
-                center[1] + radius * math.sin(math.tau * index / 32),
-            ),
-            loop,
-        )
-        for index in range(32)
+def point_to_segment_distance(point: Point, start: Point, end: Point) -> float:
+    delta_x = end[0] - start[0]
+    delta_y = end[1] - start[1]
+    length_squared = delta_x * delta_x + delta_y * delta_y
+    if length_squared <= EPSILON * EPSILON:
+        return math.dist(point, start)
+    projection = (
+        (point[0] - start[0]) * delta_x
+        + (point[1] - start[1]) * delta_y
+    ) / length_squared
+    projection = min(1.0, max(0.0, projection))
+    closest = (
+        start[0] + projection * delta_x,
+        start[1] + projection * delta_y,
     )
+    return math.dist(point, closest)
+
+
+def circle_in_loop(center: Point, radius: float, loop: ProfileLoop2D) -> bool:
+    if not point_in_loop(center, loop):
+        return False
+    points = loop_polyline(loop)
+    if not points_close(points[0], points[-1]):
+        points.append(points[0])
+    minimum_boundary_distance = min(
+        point_to_segment_distance(center, start, end)
+        for start, end in zip(points, points[1:], strict=False)
+    )
+    return minimum_boundary_distance + EPSILON >= radius
 
 
 def _orientation(first: Point, second: Point, third: Point) -> int:
@@ -210,17 +233,10 @@ def loop_self_intersects(loop: ProfileLoop2D) -> bool:
     points = loop_polyline(loop)
     edges = list(zip(points, points[1:], strict=False))
     for index, (first_start, first_end) in enumerate(edges):
-        for second_start, second_end in edges[index + 1 :]:
-            if any(
-                points_close(first, second)
-                for first, second in (
-                    (first_start, second_start),
-                    (first_start, second_end),
-                    (first_end, second_start),
-                    (first_end, second_end),
-                )
-            ):
+        for second_index in range(index + 1, len(edges)):
+            if second_index == index + 1 or (index == 0 and second_index == len(edges) - 1):
                 continue
+            second_start, second_end = edges[second_index]
             if segments_intersect(first_start, first_end, second_start, second_end):
                 return True
     return False

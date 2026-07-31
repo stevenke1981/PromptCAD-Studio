@@ -53,8 +53,8 @@ known_limitations:
   - DXF extraction supports one closed 2D modelspace line/arc profile and circular holes only
   - DXF blocks, annotations as geometry, multiple profiles, dimensions, arrays, and multi-view inference are not converted
 evidence:
-  - 79 pytest tests passed
-  - app coverage 82 percent
+  - 85 pytest tests passed
+  - app coverage 81 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views

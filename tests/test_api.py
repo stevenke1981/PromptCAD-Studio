@@ -106,13 +106,15 @@ def test_dxf_worker_timeout_cleans_parent_owned_temporary_file(
     source = Path("examples/dxf-to-cad/plate-line-arc-four-holes-mm.dxf").read_bytes()
     real_named_temporary_file = tempfile.NamedTemporaryFile
     created: list[Path] = []
+    worker_options: dict = {}
 
     def tracked_temporary_file(*args, **kwargs):
         stream = real_named_temporary_file(*args, **kwargs)
         created.append(Path(stream.name))
         return stream
 
-    def time_out(*_args, **_kwargs):
+    def time_out(*_args, **kwargs):
+        worker_options.update(kwargs)
         raise subprocess.TimeoutExpired("dxf-worker", 1)
 
     monkeypatch.setattr("app.services.job_service.subprocess.run", time_out)
@@ -129,6 +131,10 @@ def test_dxf_worker_timeout_cleans_parent_owned_temporary_file(
 
     assert created
     assert all(not path.exists() for path in created)
+    assert all(service.settings.data_dir not in path.parents for path in created)
+    assert worker_options["shell"] is False
+    assert worker_options["cwd"] == Path(__file__).resolve().parents[1]
+    assert not any(key.startswith("PROMPTCAD_") for key in worker_options["env"])
 
 
 def test_dxf_multipart_body_is_rejected_before_parser(client, monkeypatch):
@@ -147,6 +153,22 @@ def test_dxf_multipart_body_is_rejected_before_parser(client, monkeypatch):
     )
     assert response.status_code == 413
     assert called is False
+
+
+def test_feature_tree_json_bodies_are_limited_before_schema_parsing(client):
+    oversized = b'{"payload":"' + b"x" * 1_050_000 + b'"}'
+    for endpoint in (
+        "/api/v1/image-feature-tree-to-spec",
+        "/api/v1/generate-from-image-feature-tree",
+        "/api/v1/dxf-feature-tree-to-spec",
+        "/api/v1/generate-from-dxf-feature-tree",
+    ):
+        response = client.post(
+            endpoint,
+            content=oversized,
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == 413, endpoint
 
 
 def test_generate_source_only(client):

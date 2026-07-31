@@ -136,3 +136,47 @@ def test_hole_outside_profile_requires_review_and_is_not_convertible() -> None:
     assert result.proposed_spec is None
     assert result.validation is not None
     assert any(issue.code == "hole_outside_profile" for issue in result.validation.issues)
+
+
+def test_narrow_concave_notch_intersecting_hole_is_not_convertible() -> None:
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 4
+    modelspace = document.modelspace()
+    modelspace.add_lwpolyline(
+        [
+            (-20, -20),
+            (20, -20),
+            (20, 20),
+            (2.1, 20),
+            (2, 5),
+            (1.9, 20),
+            (-20, 20),
+        ],
+        close=True,
+    )
+    modelspace.add_circle((0, 0), radius=10)
+
+    result = _extractor().analyze(_bytes(document), thickness_mm=3)
+
+    assert result.convertible is False
+    assert result.proposed_spec is None
+    assert result.validation is not None
+    assert any(issue.code == "hole_outside_profile" for issue in result.validation.issues)
+
+
+def test_self_touching_multi_loop_profile_is_not_convertible() -> None:
+    document = ezdxf.new("R2010")
+    document.header["$INSUNITS"] = 4
+    document.modelspace().add_lwpolyline(
+        [(0, 0), (10, 0), (5, 10), (0, 0), (-10, 0), (-5, 10)],
+        close=True,
+    )
+
+    result = _extractor().analyze(_bytes(document), thickness_mm=2)
+
+    assert result.convertible is False
+    assert result.validation is not None
+    assert any(
+        issue.code == "profile_self_intersection"
+        for issue in result.validation.issues
+    )

@@ -80,7 +80,7 @@ def test_profile_extrusion_compilers_preserve_arc_or_use_bounded_tessellation():
 
     scad = OpenScadCompiler().compile(doc)
     assert "linear_extrude(height=6) polygon(points=[" in scad
-    assert "tessellated with at most 96 segments per arc" in scad
+    assert "tessellated with at most 256 segments per arc" in scad
 
 
 def test_axis_aware_blind_and_countersink_compilation():

@@ -122,18 +122,30 @@ def _dxf(args) -> int:
     if data is None:
         return 2
 
-    analysis = asyncio.run(
-        service.analyze_dxf_bytes(
-            data,
-            thickness_mm=args.thickness,
-            unit_override=args.units,
+    try:
+        analysis = asyncio.run(
+            service.analyze_dxf_bytes(
+                data,
+                thickness_mm=args.thickness,
+                unit_override=args.units,
+            )
         )
-    )
+    except (ValueError, RuntimeError) as exc:
+        print(f"DXF 分析失敗：{exc}", file=sys.stderr)
+        return 2
     if args.analysis_output:
-        Path(args.analysis_output).write_text(
-            json.dumps(analysis.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        try:
+            Path(args.analysis_output).write_text(
+                json.dumps(
+                    analysis.model_dump(mode="json"),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"無法寫入 DXF 分析結果：{exc}", file=sys.stderr)
+            return 2
     if not args.confirm:
         _print_json(analysis.model_dump(mode="json"))
         return 0 if analysis.convertible else 2
@@ -143,13 +155,17 @@ def _dxf(args) -> int:
     current_data = _read_dxf(path, service.settings.max_dxf_bytes)
     if current_data is None:
         return 2
-    current_analysis = asyncio.run(
-        service.analyze_dxf_bytes(
-            current_data,
-            thickness_mm=args.thickness,
-            unit_override=args.units,
+    try:
+        current_analysis = asyncio.run(
+            service.analyze_dxf_bytes(
+                current_data,
+                thickness_mm=args.thickness,
+                unit_override=args.units,
+            )
         )
-    )
+    except (ValueError, RuntimeError) as exc:
+        print(f"DXF 重新分析失敗：{exc}", file=sys.stderr)
+        return 2
     if not current_analysis.convertible:
         _print_json(current_analysis.model_dump(mode="json"))
         return 2
@@ -168,14 +184,21 @@ def _dxf(args) -> int:
             return 2
         feature_tree = edited.feature_tree
 
-    manifest = asyncio.run(
-        service.generate_from_dxf_feature_tree(
-            current_analysis,
-            feature_tree,
-            formats=args.formats,
-            render=not args.no_render,
+    try:
+        manifest = asyncio.run(
+            service.generate_from_dxf_feature_tree(
+                current_analysis,
+                feature_tree,
+                formats=args.formats,
+                render=not args.no_render,
+            )
         )
-    )
+    except ValueError as exc:
+        print(f"特徵樹驗證失敗：{exc}", file=sys.stderr)
+        return 2
+    except RuntimeError as exc:
+        print(f"CAD 輸出失敗：{exc}", file=sys.stderr)
+        return 1
     _print_json(manifest.model_dump(mode="json"))
     return 0 if manifest.status != "failed" else 1
 

@@ -119,3 +119,54 @@ def test_dxf_cli_rejects_oversized_file_before_analysis(tmp_path, monkeypatch, c
     assert result == 2
     assert not service.analysis_calls
     assert "超過" in capsys.readouterr().err
+
+
+def test_dxf_cli_reports_analysis_errors_without_traceback(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    source = tmp_path / "invalid.dxf"
+    source.write_bytes(b"not-a-dxf")
+    service = _DxfService()
+
+    async def reject(*_args, **_kwargs):
+        raise ValueError("DXF is invalid")
+
+    service.analyze_dxf_bytes = reject
+    monkeypatch.setattr(cli, "JobService", lambda _settings: service)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+
+    args = _args(str(source), "--thickness", "2")
+    result = args.func(args)
+    error = capsys.readouterr().err
+
+    assert result == 2
+    assert error.strip() == "DXF 分析失敗：DXF is invalid"
+    assert "Traceback" not in error
+
+
+def test_dxf_cli_reports_analysis_output_write_errors_without_traceback(
+    tmp_path,
+    monkeypatch,
+    capsys,
+) -> None:
+    source = tmp_path / "plate.dxf"
+    source.write_bytes(b"minimal-dxf")
+    service = _DxfService()
+    monkeypatch.setattr(cli, "JobService", lambda _settings: service)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+
+    args = _args(
+        str(source),
+        "--thickness",
+        "2",
+        "--analysis-output",
+        str(tmp_path),
+    )
+    result = args.func(args)
+    error = capsys.readouterr().err
+
+    assert result == 2
+    assert error.startswith("無法寫入 DXF 分析結果：")
+    assert "Traceback" not in error
