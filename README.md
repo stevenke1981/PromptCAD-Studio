@@ -7,7 +7,9 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
   → 標準件 CAD Agent／本地規則／OpenAI-compatible LLM 規劃器
 圖片／草圖
   → 安全解碼／已知長度校準／輪廓與圓孔擷取／可編輯 Feature Tree
-  → 受控 CadDocument 1.0 DSL
+DXF
+  → 隔離解析／線與三點圓弧輪廓／圓孔／對稱判斷／可編輯 Feature Tree
+  → 受控 CadDocument 1.0／1.1 DSL
   → 幾何與製造前驗證
   → CadQuery／OpenSCAD 編譯器
   → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
@@ -20,6 +22,7 @@ PromptCAD Studio 將中文或英文提示詞轉成**可驗證、可重現、可�
 - 中文／英文提示詞本地解析，沒有 API Key 也能使用。
 - 標準件 CAD Agent：辨識 NEMA17 並帶入有來源、可覆寫的馬達面尺寸與支架參數。
 - 校準圖片轉 CAD：正俯視 PNG/JPEG 擷取矩形外框與圓孔，產生信心分數、可編輯 Feature Tree、CAD DSL 與完整工程輸出。
+- 受限 DXF 工程圖轉 3D：單一閉合 LINE／ARC／LWPOLYLINE／2D POLYLINE 外框與 CIRCLE 圓孔，經人工確認後拉伸成完整 CAD 輸出。
 - OpenAI-compatible LLM 規劃器，支援 `json_schema`、`json_object` 與純提示 JSON 模式。
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
 - 基礎幾何：板件、圓柱、圓環、L 型支架、開口外殼。
@@ -137,6 +140,26 @@ CLI 會重新分析原圖並比對 SHA-256；只有來源相符的已編輯 Feat
 
 完整驗收範例位於 [`examples/generated/image-to-cad`](examples/generated/image-to-cad)。
 
+### DXF 工程圖轉 3D
+
+Web UI 可上傳 DXF，指定厚度與單位後查看解析出的閉合輪廓、圓孔、對稱性與 Feature Tree。原始 DXF 不會保存到工作或 ZIP；只有人工確認的 Feature Tree、來源雜湊、DSL 與 CAD 產物會留下。
+
+```powershell
+promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf `
+  --thickness 6 `
+  --analysis-output dxf-analysis.json
+
+# 編輯分析 JSON 內的 feature_tree，再以同一 DXF 確認輸出
+promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf `
+  --thickness 6 `
+  --feature-tree-input dxf-analysis.json `
+  --confirm
+```
+
+目前會拒絕 blocks／INSERT、SPLINE、HATCH、ELLIPSE、非 WCS +Z、3D、高複雜度、多重或開放輪廓。無單位 DXF 必須用 `--units mm|inch|cm` 明確指定。
+
+線／圓弧與四孔的完整 STEP、STL、DXF、SVG、PDF、Python、SCAD、JSON 驗收包位於 [`examples/generated/dxf-to-cad`](examples/generated/dxf-to-cad)。
+
 ### Web 編輯流程
 
 1. 輸入「長 120、寬 60、厚 10，四角 M6 通孔，R5」。
@@ -154,6 +177,7 @@ promptcad validate examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/plate-four-holes/spec.json
 promptcad render examples/generated/enclosure-side-cutout/spec.json
 promptcad image examples/image-to-cad/plate-top-view.png --known-length 100 --thickness 5
+promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf --thickness 6
 promptcad doctor
 ```
 
@@ -250,6 +274,8 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 | `validation.json` | errors、warnings、info 與 review 狀態 |
 | `image-analysis.json` | 圖片尺寸、校準、偵測結果與已驗證來源 |
 | `feature-tree.json` | 人工確認後、實際用於生成 CAD 的 Feature Tree |
+| `dxf-analysis.json` | DXF 單位、來源雜湊、實體統計、對稱性與已驗證 provenance |
+| `dxf-feature-tree.json` | 人工確認後、實際用於 DXF 轉 3D 的 Feature Tree |
 | `model.py` | 可獨立執行的 CadQuery 模型 |
 | `model.scad` | OpenSCAD fallback 模型 |
 | `preview.svg` | 不依賴 CAD 核心的快速工程預覽 |
@@ -268,6 +294,7 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 4. `preview.svg` 是快速預覽，不是 CAD kernel 的 BREP 渲染結果。
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
 6. 圖片 MVP 僅支援校準後的高對比正俯視矩形板與圓孔；厚度必須輸入。透視、反光、遮擋、任意輪廓與多零件照片會停止自動轉換。
+7. DXF 垂直切片僅支援 modelspace 中一個閉合 2D 外框與圓孔的拉伸；PDF、多視圖、旋轉、陣列、倒角與圓角推理仍屬後續工作。
 
 ## 測試與品質檢查
 
@@ -279,7 +306,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼、校準、輪廓／圓孔擷取、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP。
+目前測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP。
 
 ## 專案結構
 
@@ -291,6 +318,8 @@ app/
   services/
     planners/          本地規則與 OpenAI-compatible LLM
     image_analysis.py  校準影像、特徵擷取與 Feature Tree 轉換
+    dxf_analysis.py    受限 DXF 解析、正規化與 Feature Tree 轉換
+  workers/             一次性 DXF 分析程序
     compiler.py        CadQuery 確定性編譯器
     openscad.py        OpenSCAD 編譯器
     renderer.py        CAD 核心選擇與受限 subprocess

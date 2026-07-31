@@ -12,7 +12,7 @@
 ## `GET /health`
 
 ```json
-{"status": "ok", "version": "0.2.0"}
+{"status": "ok", "version": "0.3.0"}
 ```
 
 ## `GET /capabilities`
@@ -133,6 +133,31 @@ curl -X POST http://localhost:8000/api/v1/image-analysis \
 
 `manifest.planner_used` 會保留為 `image-feature-tree`，不會降級成手動 DSL 工作。
 
+## `POST /dxf-analysis`
+
+以 `multipart/form-data` 上傳受限 2D DXF。此端點只分析，不建立工作或執行 CAD kernel。
+
+- `dxf`：內容以 ASCII／AutoCAD Binary DXF 簽章與 `ezdxf` 實際解析，不信任檔名或 MIME。
+- `thickness_mm`：人工指定的拉伸厚度。
+- `unit_override`：`auto`、`mm`、`inch` 或 `cm`；`auto` 只接受 DXF `$INSUNITS` 明確為這三種單位。
+
+```bash
+curl -X POST http://localhost:8000/api/v1/dxf-analysis \
+  -F "dxf=@plate-two-holes-mm.dxf" \
+  -F "thickness_mm=6" \
+  -F "unit_override=auto"
+```
+
+成功回傳來源與正規化幾何 SHA-256、解析器版本、實體統計、對稱軸、閉合 line／arc 輪廓、圓孔、可編輯 Feature Tree、preview 與 validation。所有結果都要求人工覆核。
+
+## `POST /dxf-feature-tree-to-spec`
+
+Body 為 `/dxf-analysis` 的完整 `analysis` 與獨立、可編輯的 `feature_tree`。伺服器會驗證分析簽章、節點白名單與父子關係，再建立 `CadDocument 1.1 profile_extrusion`。
+
+## `POST /generate-from-dxf-feature-tree`
+
+Body 與上一端點相同，另可帶 `formats` 與 `render`。確認後的工作會保存 `dxf-analysis.json`、`dxf-feature-tree.json`、DSL、驗證與 CAD 產物；不保存原始 DXF。`manifest.planner_used=dxf-feature-tree`。
+
 ## `POST /validate`
 
 Body 是完整 `CadDocument`。回傳：
@@ -178,7 +203,7 @@ curl http://localhost:8000/api/v1/capabilities \
 ## 常見錯誤
 
 - `401`：Token 缺少或錯誤。
-- `413`：圖片 multipart request 超過伺服器的前置 body 上限。
+- `413`：圖片或 DXF multipart request 超過伺服器的前置 body 上限。
 - `404`：工作或檔案不存在，或識別碼／檔名不符合安全格式。
 - `422`：Prompt、DSL、圖片、校準、Feature Tree、格式或 LLM 規劃結果不符合 schema。
 - HTTP `200` 且 manifest `status=failed`：工作已被記錄，但驗證閘門阻止渲染；請查看 `validation.issues`。

@@ -8,10 +8,12 @@ from app.models.cad import (
     EnclosureBase,
     LBracketBase,
     PlateBase,
+    ProfileExtrusionBase,
     RectangularCutoutFeature,
     RingBase,
     SideFace,
 )
+from app.services.profile_geometry import loop_bounds, loop_polyline
 
 
 def _f(value: float) -> str:
@@ -187,6 +189,13 @@ class OpenScadCompiler:
                 f"{indent}  translate([{_f(-b.length / 2 + b.wall_thickness)}, {_f(-b.width / 2 + b.wall_thickness)}, {_f(b.wall_thickness)}]) cube([{_f(b.length - 2 * b.wall_thickness)}, {_f(b.width - 2 * b.wall_thickness)}, {_f(b.height)}]);",
                 f"{indent}}}",
             ]
+        if isinstance(b, ProfileExtrusionBase):
+            points = loop_polyline(b.outer)
+            point_list = ", ".join(f"[{_f(x)}, {_f(y)}]" for x, y in points[:-1])
+            return [
+                f"{indent}// Profile arcs are tessellated with at most 96 segments per arc.",
+                f"{indent}linear_extrude(height={_f(b.thickness)}) polygon(points=[{point_list}]);",
+            ]
         raise TypeError(type(b))
 
     @staticmethod
@@ -200,4 +209,7 @@ class OpenScadCompiler:
             return b.outer_diameter / 2, b.outer_diameter / 2, b.height
         if isinstance(b, LBracketBase):
             return b.width / 2, b.depth / 2, b.vertical_height + b.thickness
+        if isinstance(b, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(b.outer)
+            return max(abs(min_x), abs(max_x)), max(abs(min_y), abs(max_y)), b.thickness
         return b.length / 2, b.width / 2, b.height

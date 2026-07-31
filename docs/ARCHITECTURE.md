@@ -14,7 +14,13 @@ Image (PNG/JPEG)
   → calibrated ImageAnalysis 1.0
   → editable Feature Tree ──────────────────┤
                                              ↓
-CadDocument 1.0
+DXF
+  → request/body + entity budgets
+  → one-shot ezdxf worker
+  → normalized line/three-point-arc profile + circles
+  → editable Feature Tree ──────────────────┤
+                                             ↓
+CadDocument 1.0 / 1.1
 (Pydantic, extra=forbid, units=mm, bounded lists/numbers)
           ↓
 DesignValidator
@@ -42,6 +48,12 @@ Job manifest + downloadable artifacts
 單一已知最長邊提供等比例校準，座標轉換後以外框中心作 CAD `(0, 0)`。厚度必須由使用者提供。所有影像結果預設 `review_required=true`，Web 和 CLI 都需要明確確認才進入 renderer。
 
 上傳資料不保存到工作目錄；原始檔名、MIME、DPI 與 EXIF 尺寸不作為幾何或路徑依據。
+
+## DXF-to-CAD ingestion
+
+DXF 也不進入 prompt planner。父程序先限制 multipart bytes 與併發，將內容寫入伺服器擁有的暫存路徑，再以 `shell=false` 啟動一次性 worker。worker 使用直接鎖定的 `ezdxf`，只讀取 modelspace 的 LINE、ARC、CIRCLE、closed LWPOLYLINE 與 2D POLYLINE；父程序負責 timeout、終止與暫存檔清理。
+
+支援範圍正規化為 `CadDocument 1.1` 的 line／three-point-arc `profile_extrusion`，圓孔轉為 Z 軸 through hole。Feature Tree 可編輯，但伺服器會以 HMAC 驗證 DXF SHA-256、單位、解析器版本、實體統計與原始幾何，再重新執行 DesignValidator。原始 DXF 與使用者檔名不進入 job、artifact 或 ZIP。
 
 ## 坐標系
 

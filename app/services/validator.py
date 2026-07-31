@@ -11,11 +11,23 @@ from app.models.cad import (
     HoleType,
     LBracketBase,
     PlateBase,
+    ProfileExtrusionBase,
     RingBase,
     SideFace,
     ValidationIssue,
     ValidationReport,
     ValidationSeverity,
+)
+from app.services.profile_geometry import (
+    MAX_VALIDATION_EDGES,
+    circle_in_loop,
+    is_degenerate,
+    loop_polyline,
+    loop_self_intersects,
+    loop_signed_area,
+    points_close,
+    segment_end,
+    segment_start,
 )
 
 
@@ -23,6 +35,7 @@ class DesignValidator:
     def validate(self, doc: CadDocument) -> ValidationReport:
         issues: list[ValidationIssue] = []
         self._base_checks(doc, issues)
+        self._profile_checks(doc, issues)
         self._hole_checks(doc, issues)
         self._cutout_checks(doc, issues)
         self._standard_checks(doc, issues)
@@ -67,12 +80,73 @@ class DesignValidator:
                 )
             )
         dimensions = self._dimensions(base)
-        if max(dimensions) / min(dimensions) > 1000:
+        if min(dimensions) > 0 and max(dimensions) / min(dimensions) > 1000:
             issues.append(
                 ValidationIssue(
                     severity=ValidationSeverity.WARNING,
                     code="extreme_aspect_ratio",
                     message="零件長寬高比例極端，請確認單位是否正確。",
+                )
+            )
+
+    @staticmethod
+    def _profile_checks(doc: CadDocument, issues: list[ValidationIssue]) -> None:
+        base = doc.base
+        if not isinstance(base, ProfileExtrusionBase):
+            return
+
+        loop = base.outer
+        has_invalid_segment = False
+        for index, segment in enumerate(loop.segments):
+            if is_degenerate(segment):
+                has_invalid_segment = True
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="profile_degenerate_segment",
+                        message=f"外框線段 {index + 1} 為退化線段或無法定義的圓弧。",
+                        feature_index=index,
+                    )
+                )
+            next_segment = loop.segments[(index + 1) % len(loop.segments)]
+            if not points_close(segment_end(segment), segment_start(next_segment)):
+                has_invalid_segment = True
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="profile_not_continuous",
+                        message=f"外框線段 {index + 1} 的終點未連接下一線段的起點。",
+                        feature_index=index,
+                    )
+                )
+
+        if has_invalid_segment:
+            return
+        if len(loop_polyline(loop)) - 1 > MAX_VALIDATION_EDGES:
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="profile_too_complex",
+                    message=(
+                        f"外框近似後超過 {MAX_VALIDATION_EDGES} 條邊，請簡化輪廓或拆分設計。"
+                    ),
+                )
+            )
+            return
+        if loop_self_intersects(loop):
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="profile_self_intersection",
+                    message="外框存在自我交叉，無法建立有效實體。",
+                )
+            )
+        if abs(loop_signed_area(loop)) <= 1e-5:
+            issues.append(
+                ValidationIssue(
+                    severity=ValidationSeverity.ERROR,
+                    code="profile_zero_area",
+                    message="外框面積為零，無法拉伸成實體。",
                 )
             )
 
@@ -139,6 +213,18 @@ class DesignValidator:
     ) -> None:
         radius = self._effective_diameter(hole) / 2
         base = doc.base
+
+        if hole.axis == Axis.Z and isinstance(base, ProfileExtrusionBase):
+            if not circle_in_loop((hole.x, hole.y), radius, base.outer):
+                issues.append(
+                    ValidationIssue(
+                        severity=ValidationSeverity.ERROR,
+                        code="hole_outside_profile",
+                        message=f"孔 {index + 1} 超出自由外框。",
+                        feature_index=index,
+                    )
+                )
+            return
 
         if hole.axis == Axis.Z and isinstance(base, (CylinderBase, RingBase)):
             center_radius = math.hypot(hole.x, hole.y)
@@ -414,6 +500,9 @@ class DesignValidator:
             return base.height if hole.axis == Axis.Z else base.diameter
         if isinstance(base, RingBase):
             return base.height if hole.axis == Axis.Z else base.outer_diameter
+        if isinstance(base, ProfileExtrusionBase):
+            dim_x, dim_y, dim_z = DesignValidator._dimensions(base)
+            return {Axis.X: dim_x, Axis.Y: dim_y, Axis.Z: dim_z}[hole.axis]
         return 1.0
 
     @staticmethod
@@ -426,4 +515,9 @@ class DesignValidator:
             return base.outer_diameter, base.outer_diameter, base.height
         if isinstance(base, LBracketBase):
             return base.width, base.depth, base.vertical_height + base.thickness
+        if isinstance(base, ProfileExtrusionBase):
+            from app.services.profile_geometry import loop_bounds
+
+            min_x, min_y, max_x, max_y = loop_bounds(base.outer)
+            return max_x - min_x, max_y - min_y, base.thickness
         return base.length, base.width, base.height

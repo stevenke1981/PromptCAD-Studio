@@ -1,0 +1,24 @@
+id: CHANGE-005
+type: feature
+risk: medium
+objective: Complete the Phase 4 restricted DXF engineering-drawing to editable 3D CAD workflow.
+scope:
+  - Bounded ASCII and binary DXF ingestion in a killable one-shot worker process
+  - Explicit DXF units normalized to millimeters with source provenance
+  - LINE, ARC, CIRCLE, closed LWPOLYLINE, and 2D POLYLINE modelspace extraction
+  - One closed analytic line/arc outer profile plus circular through holes
+  - Symmetry analysis, typed editable Feature Tree, and explicit review
+  - CadDocument 1.1 profile extrusion with shared validation and compiler semantics
+  - Web, REST, and CLI confirmation flows
+  - STEP, STL, DXF, SVG, PDF, Python, SCAD, and JSON job artifacts
+protected_behavior:
+  - CadDocument 1.0 files and all accepted prompt, NEMA17, and image flows remain compatible
+  - Ambiguous, unsupported, non-planar, invalid, or over-budget DXF never reaches a CAD engine
+  - Raw DXF bytes and untrusted filenames never enter job artifacts or ZIP bundles
+  - LLM output remains data-only and never executes arbitrary source
+acceptance:
+  - A line-and-arc DXF with four circles produces an editable tree before any CAD job
+  - Confirmation produces one valid STEP solid with expected bounds and four through holes
+  - Unit conversion, provenance tampering, body limits, and invalid topology fail closed
+  - CLI and Web user flows pass with visible derived artifacts and zero browser errors
+status: accepted

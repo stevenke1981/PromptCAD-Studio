@@ -1,17 +1,46 @@
 from __future__ import annotations
 
 from app.models.cad import (
+    ArcSegment2D,
     CadDocument,
     EnclosureBase,
     FilletFeature,
     HoleFeature,
+    LineSegment2D,
     PlannerMetadata,
     PlateBase,
+    Point2D,
+    ProfileExtrusionBase,
+    ProfileLoop2D,
     RectangularCutoutFeature,
     SideFace,
 )
 from app.services.compiler import CadQueryCompiler
 from app.services.openscad import OpenScadCompiler
+
+
+def profile_document():
+    return CadDocument(
+        schema_version="1.1",
+        name="arc-profile",
+        source_prompt="arc profile",
+        base=ProfileExtrusionBase(
+            thickness=6,
+            outer=ProfileLoop2D(
+                segments=[
+                    LineSegment2D(start=Point2D(x=-20, y=-10), end=Point2D(x=20, y=-10)),
+                    ArcSegment2D(
+                        start=Point2D(x=20, y=-10),
+                        mid=Point2D(x=25, y=0),
+                        end=Point2D(x=20, y=10),
+                    ),
+                    LineSegment2D(start=Point2D(x=20, y=10), end=Point2D(x=-20, y=10)),
+                    LineSegment2D(start=Point2D(x=-20, y=10), end=Point2D(x=-20, y=-10)),
+                ]
+            ),
+        ),
+        planner=PlannerMetadata(planner="test"),
+    )
 
 
 def document():
@@ -38,6 +67,20 @@ def test_openscad_compiler_contains_difference():
     code = OpenScadCompiler().compile(document())
     assert "difference()" in code
     assert "cylinder(d=5" in code
+
+
+def test_profile_extrusion_compilers_preserve_arc_or_use_bounded_tessellation():
+    doc = profile_document()
+
+    cadquery = CadQueryCompiler().compile(doc)
+    assert "profile = cq.Workplane('XY').moveTo(-20, -10)" in cadquery
+    assert "profile.threePointArc((25, 0), (20, 10))" in cadquery
+    assert "profile.close().extrude(6)" in cadquery
+    compile(cadquery, "profile-model.py", "exec")
+
+    scad = OpenScadCompiler().compile(doc)
+    assert "linear_extrude(height=6) polygon(points=[" in scad
+    assert "tessellated with at most 96 segments per arc" in scad
 
 
 def test_axis_aware_blind_and_countersink_compilation():

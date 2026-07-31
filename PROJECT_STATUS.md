@@ -1,10 +1,11 @@
-# Project Status — v0.2.0
+# Project Status — v0.3.0
 
 ## 可用功能
 
-- Prompt → 本地規則／OpenAI-compatible LLM → CadDocument 1.0。
+- Prompt → 本地規則／OpenAI-compatible LLM → CadDocument 1.0／1.1。
 - 標準件 CAD Agent：NEMA17 自動辨識、來源追蹤、參數覆寫與完整支架輸出。
 - 校準圖片／草圖轉 CAD：安全上傳、矩形與圓孔擷取、可編輯 Feature Tree、人工確認及完整輸出。
+- 受限 DXF 轉 3D：line／exact three-point arc 閉合輪廓、圓孔、對稱判斷、可編輯 Feature Tree、人工確認及完整輸出。
 - Web UI、REST API、CLI。
 - 可編輯 JSON 後重新驗證與輸出。
 - Plate、cylinder、ring、L bracket、open enclosure。
@@ -17,8 +18,8 @@
 
 ## 本封裝已驗證
 
-- 59 個 pytest 測試通過。
-- `app` 測試覆蓋率 79%。
+- 79 個 pytest 測試通過。
+- `app` 測試覆蓋率 82%。
 - Python 3.12.13 的 uv 鎖定環境可重現安裝。
 - Ruff 全專案檢查通過（自動排除本機 `.venv` 與生成產物）。
 - Python `compileall` 通過。
@@ -30,6 +31,10 @@
 - 校準 PNG → 100×60×5 mm 板件與四孔 Feature Tree → CadQuery STEP／STL／DXF／SVG／PDF 通過。
 - 影像 STEP 回讀為 1 個實體、100×60×5 mm bounding box、4 個圓柱面。
 - 圖片工作 manifest 保留 `image-feature-tree` planner、校準 provenance 與確認後 Feature Tree；JPEG 與透視梯形安全回歸測試通過。
+- 線／圓弧四孔 DXF → `profile_extrusion` → CadQuery STEP／STL／DXF／SVG／PDF 通過。
+- DXF STEP 回讀為 1 個有效實體、120×40×6 mm bounding box、4 個 Ø5 mm through holes；兩端 R20 圓弧保持解析幾何。
+- Web 實際操作「DXF 上傳 → 特徵樹 → 人工確認 → 14 個下載入口」通過，無 Console 錯誤；延遲回應不會覆寫較新的上傳分析。
+- 鎖定執行環境的 pip-audit 無已知漏洞。
 
 ## 封裝環境限制
 
@@ -38,10 +43,11 @@
 ## 下一階段
 
 - 擴充標準件目錄至 NEMA23、常用軸承與連接器。
-- 2D 草圖 DSL：線、圓弧、約束、拉伸、旋轉與陣列。
+- 2D 草圖 DSL 後續：尺寸約束、旋轉與陣列。
 - 多孔群與 pattern／mirror。
 - 正式工程圖、尺寸、公差、BOM 與標題欄。
 - BREP validity、最小壁厚、製程規則與干涉檢查。
 - 非同步 renderer worker、sandbox、配額與多租戶。
-- 受限 DXF 單一閉合輪廓／圓孔 → Feature Tree → 3D 拉伸。
+- CAD backend 能力合約、registry、provenance 與跨後端 conformance suite。
+- Build123d／FreeCAD 開源後端，以及隔離的 Fusion 360／SolidWorks adapters。
 - 圖片四點透視校正、任意閉合輪廓、線與圓弧。

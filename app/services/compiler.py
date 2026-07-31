@@ -12,10 +12,12 @@ from app.models.cad import (
     HoleType,
     LBracketBase,
     PlateBase,
+    ProfileExtrusionBase,
     RectangularCutoutFeature,
     RingBase,
     SideFace,
 )
+from app.services.profile_geometry import loop_bounds
 
 
 def _f(value: float) -> str:
@@ -137,6 +139,24 @@ class CadQueryCompiler:
                 f"    inner = cq.Workplane('XY').box({_f(inner_l)}, {_f(inner_w)}, {_f(inner_h + 0.2)}, centered=(True, True, False)).translate((0, 0, {_f(b.wall_thickness)}))",
                 "    result = outer.cut(inner)",
             ]
+        if isinstance(b, ProfileExtrusionBase):
+            first = b.outer.segments[0].start
+            lines = [
+                f"    profile = cq.Workplane('XY').moveTo({_f(first.x)}, {_f(first.y)})"
+            ]
+            for segment in b.outer.segments:
+                if segment.kind == "line":
+                    lines.append(
+                        f"    profile = profile.lineTo({_f(segment.end.x)}, {_f(segment.end.y)})"
+                    )
+                else:
+                    lines.append(
+                        "    profile = profile.threePointArc("
+                        f"({_f(segment.mid.x)}, {_f(segment.mid.y)}), "
+                        f"({_f(segment.end.x)}, {_f(segment.end.y)}))"
+                    )
+            lines.append(f"    result = profile.close().extrude({_f(b.thickness)})")
+            return lines
         raise TypeError(f"Unsupported base: {type(b)!r}")
 
     @staticmethod
@@ -260,4 +280,7 @@ class CadQueryCompiler:
             return b.outer_diameter / 2, b.outer_diameter / 2, b.height
         if isinstance(b, LBracketBase):
             return b.width / 2, b.depth / 2, b.vertical_height + b.thickness
+        if isinstance(b, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(b.outer)
+            return max(abs(min_x), abs(max_x)), max(abs(min_y), abs(max_y)), b.thickness
         return b.length / 2, b.width / 2, b.height

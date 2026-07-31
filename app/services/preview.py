@@ -9,9 +9,11 @@ from app.models.cad import (
     EnclosureBase,
     LBracketBase,
     PlateBase,
+    ProfileExtrusionBase,
     RingBase,
     SideFace,
 )
+from app.services.profile_geometry import loop_bounds, loop_polyline
 
 
 class SvgPreview:
@@ -25,8 +27,19 @@ class SvgPreview:
         dim_x, dim_y = self._xy_size(b)
         scale = min(600 / max(dim_x, 1), 420 / max(dim_y, 1))
         shapes: list[str] = []
+        origin_x, origin_y = 0.0, 0.0
 
-        if isinstance(b, (PlateBase, EnclosureBase, LBracketBase)):
+        if isinstance(b, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(b.outer)
+            origin_x, origin_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            points = loop_polyline(b.outer)
+            path = " ".join(
+                f"{'M' if index == 0 else 'L'} {cx + (x - origin_x) * scale:.2f} "
+                f"{cy - (y - origin_y) * scale:.2f}"
+                for index, (x, y) in enumerate(points)
+            )
+            shapes.append(f'<path d="{path} Z" class="solid"/>')
+        elif isinstance(b, (PlateBase, EnclosureBase, LBracketBase)):
             w, h = dim_x * scale, dim_y * scale
             x, y = cx - w / 2, cy - h / 2
             shapes.append(f'<rect x="{x:.2f}" y="{y:.2f}" width="{w:.2f}" height="{h:.2f}" rx="4" class="solid"/>')
@@ -48,8 +61,8 @@ class SvgPreview:
         for hole in doc.holes:
             if hole.axis.value != "z":
                 continue
-            x = cx + hole.x * scale
-            y = cy - hole.y * scale
+            x = cx + (hole.x - origin_x) * scale
+            y = cy - (hole.y - origin_y) * scale
             r = hole.diameter * scale / 2
             shapes.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{max(r,2):.2f}" class="cut"/>')
             shapes.append(f'<line x1="{x-8:.2f}" y1="{y:.2f}" x2="{x+8:.2f}" y2="{y:.2f}" class="center"/>')
@@ -121,4 +134,7 @@ class SvgPreview:
             return base.diameter, base.diameter
         if isinstance(base, RingBase):
             return base.outer_diameter, base.outer_diameter
+        if isinstance(base, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(base.outer)
+            return max_x - min_x, max_y - min_y
         return 100, 100

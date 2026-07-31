@@ -1,4 +1,4 @@
-id: BASELINE-20260731-004
+id: BASELINE-20260731-005
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -10,25 +10,36 @@ accepted_features:
   - Standards-aware NEMA17 CAD Agent with provenance and overrides
   - Calibrated PNG and JPEG rectangle and circular-hole extraction
   - Typed editable image Feature Tree with explicit review before rendering
+  - Restricted ASCII and binary DXF closed-profile and circular-hole extraction
+  - CadDocument 1.1 profile extrusion with analytic line and three-point arc segments
+  - Typed editable DXF Feature Tree with explicit review before rendering
 critical_user_flows:
   - Chinese prompt to validated DSL and downloadable artifacts
   - Edited DSL to regenerated artifacts
   - Invalid geometry blocked before CAD kernel execution
   - Calibrated top-view image to reviewed Feature Tree and downloadable CAD artifacts
+  - Bounded DXF to reviewed Feature Tree and downloadable CAD artifacts
 protected_behavior:
   - Unknown DSL fields are rejected
   - Generated code is deterministic and does not execute prompt text
   - Source-only mode never fabricates CAD-kernel outputs
   - Untrusted uploaded filenames and raw images are not stored as job artifacts
+  - Raw DXF bytes and untrusted DXF filenames are not stored as job artifacts
+  - Unsupported or ambiguous DXF geometry is blocked before CAD rendering
 public_interfaces:
   - CadDocument schema_version 1.0
+  - CadDocument schema_version 1.1 profile_extrusion
   - REST API under /api/v1
-  - promptcad generate, image, validate, render, and doctor
+  - promptcad generate, image, dxf, validate, render, and doctor
   - POST /api/v1/image-analysis
   - POST /api/v1/image-feature-tree-to-spec
   - POST /api/v1/generate-from-image-feature-tree
+  - POST /api/v1/dxf-analysis
+  - POST /api/v1/dxf-feature-tree-to-spec
+  - POST /api/v1/generate-from-dxf-feature-tree
 data_compatibility:
   - Existing CadDocument 1.0 files without cutouts remain valid
+  - CadDocument 1.1 is required only for profile_extrusion
 environment:
   - Windows PowerShell
   - Python 3.12.13
@@ -39,9 +50,11 @@ known_limitations:
   - Docker, OpenSCAD executable, and Conda paths were not run locally
   - Image extraction supports calibrated high-contrast top-view rectangles and circular holes only
   - Perspective, arbitrary contours, occlusion, and reflective photos require future calibration modes
+  - DXF extraction supports one closed 2D modelspace line/arc profile and circular holes only
+  - DXF blocks, annotations as geometry, multiple profiles, dimensions, arrays, and multi-view inference are not converted
 evidence:
-  - 59 pytest tests passed
-  - app coverage 79 percent
+  - 79 pytest tests passed
+  - app coverage 82 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views
@@ -50,3 +63,6 @@ evidence:
   - JPEG decode, perspective-trapezoid rejection, and analysis-provenance tamper tests passed
   - Image job manifest preserves image-feature-tree provenance and analysis/tree artifacts
   - Web upload, Feature Tree confirmation, CAD preview, and downloads passed with zero console errors
+  - Python dependency audit found no known vulnerabilities
+  - Line-and-arc DXF with four circles produced one valid 120 x 40 x 6 mm STEP solid with four verified hole faces
+  - Web DXF upload, editable Feature Tree confirmation, 14 download links, and stale-response guard passed with zero console or page errors

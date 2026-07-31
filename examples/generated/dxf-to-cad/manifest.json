@@ -1,0 +1,265 @@
+{
+  "job_id": "90074dbbf21540d3bc6fa2324a0521de",
+  "status": "completed",
+  "created_at": "2026-07-31T00:53:51.180162+00:00",
+  "prompt": "由受限 DXF 可編輯 Feature Tree 建立閉合輪廓與圓孔拉伸",
+  "planner_used": "dxf-feature-tree",
+  "renderer_used": "cadquery",
+  "requested_formats": [
+    "step",
+    "stl",
+    "dxf",
+    "svg",
+    "pdf",
+    "py",
+    "scad",
+    "json"
+  ],
+  "spec": {
+    "schema_version": "1.1",
+    "name": "dxf-extracted-profile",
+    "source_prompt": "由受限 DXF 可編輯 Feature Tree 建立閉合輪廓與圓孔拉伸",
+    "unit": "mm",
+    "material": null,
+    "base": {
+      "kind": "profile_extrusion",
+      "outer": {
+        "segments": [
+          {
+            "kind": "line",
+            "start": {
+              "x": 10.0,
+              "y": 0.0
+            },
+            "end": {
+              "x": 90.0,
+              "y": 0.0
+            }
+          },
+          {
+            "kind": "arc",
+            "start": {
+              "x": 90.0,
+              "y": 0.0
+            },
+            "mid": {
+              "x": 110.0,
+              "y": 19.999999999999996
+            },
+            "end": {
+              "x": 90.0,
+              "y": 40.0
+            }
+          },
+          {
+            "kind": "line",
+            "start": {
+              "x": 90.0,
+              "y": 40.0
+            },
+            "end": {
+              "x": 10.0,
+              "y": 40.0
+            }
+          },
+          {
+            "kind": "arc",
+            "start": {
+              "x": 10.000000000000002,
+              "y": 40.0
+            },
+            "mid": {
+              "x": -10.0,
+              "y": 20.000000000000004
+            },
+            "end": {
+              "x": 9.999999999999996,
+              "y": 0.0
+            }
+          }
+        ]
+      },
+      "thickness": 6.0
+    },
+    "holes": [
+      {
+        "kind": "hole",
+        "x": 20.0,
+        "y": 15.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.0,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": 40.0,
+        "y": 25.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.0,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": 60.0,
+        "y": 15.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.0,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      },
+      {
+        "kind": "hole",
+        "x": 80.0,
+        "y": 25.0,
+        "z": 0.0,
+        "axis": "z",
+        "diameter": 5.0,
+        "hole_type": "through",
+        "depth": null,
+        "thread": null,
+        "counterbore_diameter": null,
+        "counterbore_depth": null,
+        "countersink_diameter": null,
+        "countersink_angle": null
+      }
+    ],
+    "cutouts": [],
+    "fillets": [],
+    "chamfers": [],
+    "standards": [],
+    "assumptions": [
+      "DXF 僅使用 modelspace 的 2D 幾何。",
+      "拉伸厚度由使用者指定。"
+    ],
+    "notes": [
+      "DXF SHA-256：e983d1fc773888ba627918082a57fcbb0ecc63621fd90b5477ebcd467f47653d",
+      "原始單位：mm",
+      "分析版本：1.0"
+    ],
+    "planner": {
+      "planner": "dxf-feature-tree",
+      "confidence": 1.0,
+      "review_required": true
+    }
+  },
+  "validation": {
+    "valid": true,
+    "review_required": true,
+    "issues": [
+      {
+        "severity": "info",
+        "code": "assumption",
+        "message": "DXF 僅使用 modelspace 的 2D 幾何。",
+        "feature_index": null
+      },
+      {
+        "severity": "info",
+        "code": "assumption",
+        "message": "拉伸厚度由使用者指定。",
+        "feature_index": null
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "filename": "drawing.pdf",
+      "media_type": "application/pdf",
+      "size": 6160,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/drawing.pdf"
+    },
+    {
+      "filename": "dxf-analysis.json",
+      "media_type": "application/json",
+      "size": 2596,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/dxf-analysis.json"
+    },
+    {
+      "filename": "dxf-feature-tree.json",
+      "media_type": "application/json",
+      "size": 2563,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/dxf-feature-tree.json"
+    },
+    {
+      "filename": "model.dxf",
+      "media_type": "application/octet-stream",
+      "size": 21121,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.dxf"
+    },
+    {
+      "filename": "model.py",
+      "media_type": "text/x-python",
+      "size": 5778,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.py"
+    },
+    {
+      "filename": "model.scad",
+      "media_type": "application/octet-stream",
+      "size": 6553,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.scad"
+    },
+    {
+      "filename": "model.step",
+      "media_type": "application/octet-stream",
+      "size": 30282,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.step"
+    },
+    {
+      "filename": "model.stl",
+      "media_type": "application/octet-stream",
+      "size": 127084,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.stl"
+    },
+    {
+      "filename": "model.svg",
+      "media_type": "image/svg+xml",
+      "size": 71503,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/model.svg"
+    },
+    {
+      "filename": "preview.svg",
+      "media_type": "image/svg+xml",
+      "size": 6684,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/preview.svg"
+    },
+    {
+      "filename": "render-warnings.json",
+      "media_type": "application/json",
+      "size": 2,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/render-warnings.json"
+    },
+    {
+      "filename": "spec.json",
+      "media_type": "application/json",
+      "size": 3281,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/spec.json"
+    },
+    {
+      "filename": "validation.json",
+      "media_type": "application/json",
+      "size": 387,
+      "url": "/api/v1/jobs/90074dbbf21540d3bc6fa2324a0521de/files/validation.json"
+    }
+  ],
+  "warnings": [],
+  "error": null
+}

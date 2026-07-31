@@ -5,8 +5,13 @@ import hashlib
 import hmac
 import json
 import mimetypes
+import os
 import secrets
+import subprocess
+import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -14,9 +19,11 @@ from pathlib import Path
 from app.core.config import Settings
 from app.models.api import Artifact, JobListItem, JobManifest, PlanResponse
 from app.models.cad import CadDocument
+from app.models.dxf import DxfAnalysisResponse, DxfFeatureTreeNode
 from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 from app.services.compiler import CadQueryCompiler
 from app.services.drawing_pdf import EngineeringDrawingPdf
+from app.services.dxf_analysis import DxfAnalysisError, DxfFeatureExtractor
 from app.services.image_analysis import ImageFeatureExtractor
 from app.services.openscad import OpenScadCompiler
 from app.services.planners.factory import PlannerFactory
@@ -42,12 +49,22 @@ class JobService:
             max_pixels=settings.max_image_pixels,
             max_dimension=settings.max_image_dimension,
         )
+        self.dxf_extractor = DxfFeatureExtractor(
+            max_bytes=settings.max_dxf_bytes,
+            max_entities=settings.max_dxf_entities,
+            max_segments=settings.max_dxf_segments,
+            max_holes=settings.max_dxf_holes,
+        )
         self._image_slots = asyncio.Semaphore(settings.image_analysis_concurrency)
+        self._dxf_slots = asyncio.Semaphore(settings.dxf_analysis_concurrency)
         self._image_executor = ThreadPoolExecutor(
             max_workers=settings.image_analysis_concurrency,
             thread_name_prefix="promptcad-image",
         )
         self._analysis_signing_key = secrets.token_bytes(32)
+
+    def close(self) -> None:
+        self._image_executor.shutdown(wait=False, cancel_futures=True)
 
     async def plan(self, prompt: str, planner_choice: str) -> PlanResponse:
         if len(prompt) > self.settings.max_prompt_chars:
@@ -161,6 +178,147 @@ class JobService:
             ) from exc
         return self._sign_analysis(result)
 
+    async def analyze_dxf_bytes(
+        self,
+        data: bytes,
+        *,
+        thickness_mm: float,
+        unit_override: str = "auto",
+    ) -> DxfAnalysisResponse:
+        if len(data) > self.settings.max_dxf_bytes:
+            raise ValueError(f"DXF exceeds the {self.settings.max_dxf_bytes} byte limit")
+        await self._dxf_slots.acquire()
+        try:
+            return await self._analyze_dxf_admitted(
+                data,
+                thickness_mm=thickness_mm,
+                unit_override=unit_override,
+            )
+        finally:
+            self._dxf_slots.release()
+
+    async def analyze_dxf_upload(
+        self,
+        upload,
+        *,
+        thickness_mm: float,
+        unit_override: str = "auto",
+    ) -> DxfAnalysisResponse:
+        await self._dxf_slots.acquire()
+        try:
+            data = await upload.read(self.settings.max_dxf_bytes + 1)
+            if len(data) > self.settings.max_dxf_bytes:
+                raise ValueError(
+                    f"DXF exceeds the {self.settings.max_dxf_bytes} byte limit"
+                )
+            return await self._analyze_dxf_admitted(
+                data,
+                thickness_mm=thickness_mm,
+                unit_override=unit_override,
+            )
+        finally:
+            self._dxf_slots.release()
+
+    async def _analyze_dxf_admitted(
+        self,
+        data: bytes,
+        *,
+        thickness_mm: float,
+        unit_override: str,
+    ) -> DxfAnalysisResponse:
+        if unit_override not in {"auto", "mm", "inch", "cm"}:
+            raise ValueError("DXF units must be auto, mm, inch, or cm")
+        result = await asyncio.to_thread(
+            self._run_dxf_worker,
+            data,
+            thickness_mm,
+            unit_override,
+        )
+        return self._sign_analysis(result)
+
+    def _run_dxf_worker(
+        self,
+        data: bytes,
+        thickness_mm: float,
+        unit_override: str,
+    ) -> DxfAnalysisResponse:
+        self.settings.ensure_directories()
+        path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                prefix=".promptcad-dxf-",
+                suffix=".dxf",
+                delete=False,
+            ) as stream:
+                stream.write(data)
+                path = Path(stream.name)
+            request = {
+                "path": str(path.resolve()),
+                "thickness_mm": thickness_mm,
+                "unit_override": unit_override,
+                "max_bytes": self.settings.max_dxf_bytes,
+                "max_entities": self.settings.max_dxf_entities,
+                "max_segments": self.settings.max_dxf_segments,
+                "max_holes": self.settings.max_dxf_holes,
+            }
+            try:
+                child_env = {
+                    key: os.environ[key]
+                    for key in (
+                        "LANG",
+                        "LC_ALL",
+                        "APPDATA",
+                        "HOME",
+                        "LOCALAPPDATA",
+                        "PATH",
+                        "SYSTEMROOT",
+                        "TEMP",
+                        "TMP",
+                        "USERPROFILE",
+                        "WINDIR",
+                        "XDG_CONFIG_HOME",
+                    )
+                    if key in os.environ
+                }
+                child_env.update(
+                    {
+                        "PYTHONDONTWRITEBYTECODE": "1",
+                        "PYTHONIOENCODING": "utf-8",
+                        "PYTHONUTF8": "1",
+                    }
+                )
+                completed = subprocess.run(
+                    [sys.executable, "-m", "app.workers.dxf_analyze"],
+                    input=json.dumps(request, separators=(",", ":")),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=self.settings.dxf_analysis_timeout_seconds,
+                    check=False,
+                    shell=False,
+                    cwd=Path(__file__).resolve().parents[2],
+                    env=child_env,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError("DXF analysis timed out and was terminated") from exc
+            if completed.returncode != 0:
+                detail = completed.stderr.strip()[:1_000]
+                raise RuntimeError(f"DXF analysis worker failed: {detail or 'unknown error'}")
+            if len(completed.stdout) > 1_000_000:
+                raise RuntimeError("DXF analysis worker produced an oversized response")
+            try:
+                payload = json.loads(completed.stdout)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("DXF analysis worker returned invalid JSON") from exc
+            if not payload.get("ok"):
+                raise DxfAnalysisError(str(payload.get("error", "DXF analysis failed")))
+            return DxfAnalysisResponse.model_validate(payload["result"])
+        finally:
+            if path is not None:
+                with suppress(FileNotFoundError):
+                    os.unlink(path)
+
     def image_feature_tree_to_spec(
         self,
         analysis: ImageAnalysisResponse,
@@ -217,7 +375,60 @@ class JobService:
             },
         )
 
-    def _sign_analysis(self, analysis: ImageAnalysisResponse) -> ImageAnalysisResponse:
+    def dxf_feature_tree_to_spec(
+        self,
+        analysis: DxfAnalysisResponse,
+        feature_tree: list[DxfFeatureTreeNode],
+    ) -> PlanResponse:
+        self._verify_analysis(analysis, kind="DXF")
+        spec = self.dxf_extractor.spec_from_feature_tree(
+            feature_tree,
+            analysis.provenance,
+        )
+        validation = self.validator.validate(spec)
+        return PlanResponse(
+            spec=spec,
+            validation=validation,
+            planner_used="dxf-feature-tree",
+        )
+
+    async def generate_from_dxf_feature_tree(
+        self,
+        analysis: DxfAnalysisResponse,
+        feature_tree: list[DxfFeatureTreeNode],
+        *,
+        formats: list[str],
+        render: bool,
+    ) -> JobManifest:
+        plan = self.dxf_feature_tree_to_spec(analysis, feature_tree)
+        analysis_payload = analysis.model_dump(
+            mode="json",
+            exclude={
+                "analysis_token",
+                "preview_svg",
+                "proposed_spec",
+                "validation",
+                "feature_tree",
+            },
+        )
+        analysis_payload["feature_tree_file"] = "dxf-feature-tree.json"
+        analysis_payload["provenance_verification"] = "verified-before-generation"
+        return await self._materialize(
+            spec=plan.spec,
+            validation=plan.validation,
+            prompt=plan.spec.source_prompt,
+            planner_used="dxf-feature-tree",
+            formats=formats,
+            render=render,
+            extra_json_artifacts={
+                "dxf-analysis.json": analysis_payload,
+                "dxf-feature-tree.json": [
+                    node.model_dump(mode="json") for node in feature_tree
+                ],
+            },
+        )
+
+    def _sign_analysis(self, analysis):
         token = hmac.new(
             self._analysis_signing_key,
             self._analysis_payload(analysis),
@@ -225,7 +436,7 @@ class JobService:
         ).hexdigest()
         return analysis.model_copy(update={"analysis_token": token})
 
-    def _verify_analysis(self, analysis: ImageAnalysisResponse) -> None:
+    def _verify_analysis(self, analysis, *, kind: str = "Image") -> None:
         supplied = analysis.analysis_token
         expected = hmac.new(
             self._analysis_signing_key,
@@ -233,10 +444,10 @@ class JobService:
             hashlib.sha256,
         ).hexdigest()
         if not supplied or not hmac.compare_digest(supplied, expected):
-            raise ValueError("Image analysis provenance is invalid or expired")
+            raise ValueError(f"{kind} analysis provenance is invalid or expired")
 
     @staticmethod
-    def _analysis_payload(analysis: ImageAnalysisResponse) -> bytes:
+    def _analysis_payload(analysis) -> bytes:
         value = analysis.model_dump(
             mode="json",
             exclude={
@@ -293,7 +504,12 @@ class JobService:
         self.storage.write_text(job_dir / "model.py", self.compiler.compile(spec))
         self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
         for filename, payload in (extra_json_artifacts or {}).items():
-            if filename not in {"image-analysis.json", "feature-tree.json"}:
+            if filename not in {
+                "image-analysis.json",
+                "feature-tree.json",
+                "dxf-analysis.json",
+                "dxf-feature-tree.json",
+            }:
                 raise ValueError("Unsupported internal JSON artifact")
             self.storage.write_json(job_dir / filename, payload)
         self.preview.write(spec, job_dir / "preview.svg")

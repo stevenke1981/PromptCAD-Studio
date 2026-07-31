@@ -23,7 +23,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         settings.ensure_directories()
-        yield
+        try:
+            yield
+        finally:
+            app.state.jobs.close()
 
     app = FastAPI(
         title=settings.app_name,
@@ -38,6 +41,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         path="/api/v1/image-analysis",
         max_body_bytes=settings.max_image_bytes + 131_072,
         max_concurrency=settings.image_analysis_concurrency,
+    )
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        path="/api/v1/dxf-analysis",
+        max_body_bytes=settings.max_dxf_bytes + 131_072,
+        max_concurrency=settings.dxf_analysis_concurrency,
     )
     app.add_middleware(
         CORSMiddleware,

@@ -77,8 +77,49 @@ class EnclosureBase(StrictModel):
         return self
 
 
+class Point2D(StrictModel):
+    x: float = Field(ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
+    y: float = Field(ge=-MAX_DIMENSION_MM, le=MAX_DIMENSION_MM)
+
+
+class LineSegment2D(StrictModel):
+    kind: Literal["line"] = "line"
+    start: Point2D
+    end: Point2D
+
+
+class ArcSegment2D(StrictModel):
+    """A circular arc defined by its start, a point on the arc, and its end."""
+
+    kind: Literal["arc"] = "arc"
+    start: Point2D
+    mid: Point2D
+    end: Point2D
+
+
+ProfileSegment2D = Annotated[
+    LineSegment2D | ArcSegment2D,
+    Field(discriminator="kind"),
+]
+
+
+class ProfileLoop2D(StrictModel):
+    segments: list[ProfileSegment2D] = Field(min_length=1, max_length=512)
+
+
+class ProfileExtrusionBase(StrictModel):
+    kind: Literal["profile_extrusion"] = "profile_extrusion"
+    outer: ProfileLoop2D
+    thickness: float = Field(gt=0, le=MAX_DIMENSION_MM)
+
+
 BaseFeature = Annotated[
-    PlateBase | CylinderBase | RingBase | LBracketBase | EnclosureBase,
+    PlateBase
+    | CylinderBase
+    | RingBase
+    | LBracketBase
+    | EnclosureBase
+    | ProfileExtrusionBase,
     Field(discriminator="kind"),
 ]
 
@@ -180,7 +221,7 @@ class StandardReference(StrictModel):
 
 
 class CadDocument(StrictModel):
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.0", "1.1"] = "1.0"
     name: str = Field(default="promptcad-part", min_length=1, max_length=80)
     source_prompt: str = Field(min_length=1, max_length=20_000)
     unit: Literal["mm"] = "mm"
@@ -194,6 +235,12 @@ class CadDocument(StrictModel):
     assumptions: list[str] = Field(default_factory=list, max_length=32)
     notes: list[str] = Field(default_factory=list, max_length=32)
     planner: PlannerMetadata
+
+    @model_validator(mode="after")
+    def profile_extrusion_requires_schema_1_1(self) -> CadDocument:
+        if isinstance(self.base, ProfileExtrusionBase) and self.schema_version != "1.1":
+            raise ValueError("profile_extrusion requires schema_version 1.1")
+        return self
 
 
 class ValidationSeverity(StrEnum):

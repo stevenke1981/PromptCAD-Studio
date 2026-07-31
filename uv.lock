@@ -1108,9 +1108,10 @@ wheels = [
 
 [[package]]
 name = "promptcad-studio"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
+    { name = "ezdxf" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "numpy" },
@@ -1135,6 +1136,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cadquery", marker = "extra == 'cad'", specifier = "==2.8.0" },
+    { name = "ezdxf", specifier = ">=1.4.4,<2" },
     { name = "fastapi", specifier = ">=0.128,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "numpy", specifier = ">=2,<3" },

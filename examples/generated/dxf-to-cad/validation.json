@@ -1,0 +1,18 @@
+{
+  "valid": true,
+  "review_required": true,
+  "issues": [
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "DXF 僅使用 modelspace 的 2D 幾何。",
+      "feature_index": null
+    },
+    {
+      "severity": "info",
+      "code": "assumption",
+      "message": "拉伸厚度由使用者指定。",
+      "feature_index": null
+    }
+  ]
+}

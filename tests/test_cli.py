@@ -1,0 +1,121 @@
+from __future__ import annotations
+
+import json
+from types import SimpleNamespace
+
+from app import cli
+
+
+class _Analysis:
+    def __init__(self, sha256: str, feature_tree: list[dict] | None = None) -> None:
+        self.convertible = True
+        self.provenance = SimpleNamespace(dxf_sha256=sha256)
+        self.feature_tree = feature_tree or [{"id": "profile-01"}]
+
+    def model_dump(self, **_kwargs):
+        return {
+            "convertible": self.convertible,
+            "provenance": {"dxf_sha256": self.provenance.dxf_sha256},
+            "feature_tree": self.feature_tree,
+        }
+
+
+class _Manifest:
+    status = "source_only"
+
+    def model_dump(self, **_kwargs):
+        return {"status": self.status}
+
+
+class _DxfService:
+    def __init__(self, max_dxf_bytes: int = 256) -> None:
+        self.settings = SimpleNamespace(max_dxf_bytes=max_dxf_bytes)
+        self.analysis_calls: list[tuple[bytes, float, str]] = []
+        self.generation = None
+
+    async def analyze_dxf_bytes(self, data, *, thickness_mm, unit_override):
+        self.analysis_calls.append((data, thickness_mm, unit_override))
+        return _Analysis("a" * 64)
+
+    async def generate_from_dxf_feature_tree(self, analysis, feature_tree, *, formats, render):
+        self.generation = (analysis, feature_tree, formats, render)
+        return _Manifest()
+
+
+def _args(*argv: str):
+    return cli.build_parser().parse_args(["dxf", *argv])
+
+
+def test_dxf_cli_writes_editable_analysis_and_reanalyzes_before_confirmation(
+    tmp_path, monkeypatch
+) -> None:
+    source = tmp_path / "plate.dxf"
+    source.write_bytes(b"minimal-dxf")
+    output = tmp_path / "analysis.json"
+    edited = tmp_path / "edited.json"
+    edited.write_text("{}", encoding="utf-8")
+    service = _DxfService()
+    monkeypatch.setattr(cli, "JobService", lambda _settings: service)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+    monkeypatch.setattr(
+        cli.DxfAnalysisResponse,
+        "model_validate_json",
+        lambda _value: _Analysis("a" * 64, [{"id": "edited-profile"}]),
+    )
+
+    result = _args(
+        str(source),
+        "--thickness",
+        "3",
+        "--units",
+        "cm",
+        "--analysis-output",
+        str(output),
+        "--feature-tree-input",
+        str(edited),
+        "--confirm",
+        "--formats",
+        "json",
+        "py",
+        "--no-render",
+    ).func(
+        _args(
+            str(source),
+            "--thickness",
+            "3",
+            "--units",
+            "cm",
+            "--analysis-output",
+            str(output),
+            "--feature-tree-input",
+            str(edited),
+            "--confirm",
+            "--formats",
+            "json",
+            "py",
+            "--no-render",
+        )
+    )
+
+    assert result == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["provenance"]["dxf_sha256"] == "a" * 64
+    assert len(service.analysis_calls) == 2
+    assert service.analysis_calls[0] == (b"minimal-dxf", 3.0, "cm")
+    assert service.generation[1] == [{"id": "edited-profile"}]
+    assert service.generation[2:] == (["json", "py"], False)
+
+
+def test_dxf_cli_rejects_oversized_file_before_analysis(tmp_path, monkeypatch, capsys) -> None:
+    source = tmp_path / "oversized.dxf"
+    source.write_bytes(b"too-large")
+    service = _DxfService(max_dxf_bytes=2)
+    monkeypatch.setattr(cli, "JobService", lambda _settings: service)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+
+    result = _args(str(source), "--thickness", "2").func(
+        _args(str(source), "--thickness", "2")
+    )
+
+    assert result == 2
+    assert not service.analysis_calls
+    assert "超過" in capsys.readouterr().err

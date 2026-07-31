@@ -1,6 +1,8 @@
-# CadDocument 1.0 DSL
+# CadDocument 1.0 / 1.1 DSL
 
 `spec.json` 是 PromptCAD Studio 的可編輯中介格式。所有尺寸均為毫米，所有 model 都禁止未知欄位。
+
+一般參數化零件使用 1.0；DXF 自由閉合輪廓使用 1.1。
 
 ## 最小板件
 
@@ -54,6 +56,40 @@
 ```json
 {"kind": "enclosure", "length": 100, "width": 70, "height": 30, "wall_thickness": 2}
 ```
+
+### Profile extrusion（schema 1.1）
+
+自由 2D 外框由連續、閉合的 line 與 three-point arc 組成，再沿 +Z 拉伸：
+
+```json
+{
+  "schema_version": "1.1",
+  "base": {
+    "kind": "profile_extrusion",
+    "thickness": 6,
+    "outer": {
+      "segments": [
+        {"kind": "line", "start": {"x": 0, "y": 0}, "end": {"x": 80, "y": 0}},
+        {
+          "kind": "arc",
+          "start": {"x": 80, "y": 0},
+          "mid": {"x": 90, "y": 10},
+          "end": {"x": 80, "y": 20}
+        },
+        {"kind": "line", "start": {"x": 80, "y": 20}, "end": {"x": 0, "y": 20}},
+        {
+          "kind": "arc",
+          "start": {"x": 0, "y": 20},
+          "mid": {"x": -10, "y": 10},
+          "end": {"x": 0, "y": 0}
+        }
+      ]
+    }
+  }
+}
+```
+
+驗證器會拒絕不連續、未閉合、退化、自交、零面積、過度取樣或孔落在輪廓外的幾何。CadQuery 保留精確三點圓弧；OpenSCAD 使用有上限的折線近似。
 
 ## Hole
 

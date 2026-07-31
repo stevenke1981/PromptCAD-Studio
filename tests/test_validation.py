@@ -1,15 +1,42 @@
 from __future__ import annotations
 
 from app.models.cad import (
+    ArcSegment2D,
     CadDocument,
     EnclosureBase,
     HoleFeature,
+    LineSegment2D,
     PlannerMetadata,
     PlateBase,
+    Point2D,
+    ProfileExtrusionBase,
+    ProfileLoop2D,
     RectangularCutoutFeature,
     SideFace,
 )
+from app.services.profile_geometry import ARC_MAX_SEGMENTS, loop_polyline
 from app.services.validator import DesignValidator
+
+
+def profile_document(*, holes=None, segments=None):
+    segments = segments or [
+        LineSegment2D(start=Point2D(x=-20, y=-10), end=Point2D(x=20, y=-10)),
+        ArcSegment2D(
+            start=Point2D(x=20, y=-10),
+            mid=Point2D(x=25, y=0),
+            end=Point2D(x=20, y=10),
+        ),
+        LineSegment2D(start=Point2D(x=20, y=10), end=Point2D(x=-20, y=10)),
+        LineSegment2D(start=Point2D(x=-20, y=10), end=Point2D(x=-20, y=-10)),
+    ]
+    return CadDocument(
+        schema_version="1.1",
+        name="profile",
+        source_prompt="profile",
+        base=ProfileExtrusionBase(outer=ProfileLoop2D(segments=segments), thickness=5),
+        holes=holes or [],
+        planner=PlannerMetadata(planner="test"),
+    )
 
 
 def make_doc(holes):
@@ -120,3 +147,73 @@ def test_enclosure_side_cutout_outside_face_is_error():
 
     assert not report.valid
     assert any(issue.code == "cutout_outside_face" for issue in report.issues)
+
+
+def test_profile_loop_and_hole_containment_are_valid():
+    report = DesignValidator().validate(
+        profile_document(holes=[HoleFeature(x=0, y=0, diameter=3)])
+    )
+
+    assert report.valid
+
+
+def test_profile_loop_reports_discontinuous_self_crossing_and_zero_area_geometry():
+    discontinuous = profile_document(
+        segments=[
+            LineSegment2D(start=Point2D(x=0, y=0), end=Point2D(x=10, y=0)),
+            LineSegment2D(start=Point2D(x=12, y=0), end=Point2D(x=0, y=10)),
+            LineSegment2D(start=Point2D(x=0, y=10), end=Point2D(x=0, y=0)),
+        ]
+    )
+    bow_tie = profile_document(
+        segments=[
+            LineSegment2D(start=Point2D(x=-10, y=-10), end=Point2D(x=10, y=10)),
+            LineSegment2D(start=Point2D(x=10, y=10), end=Point2D(x=-10, y=10)),
+            LineSegment2D(start=Point2D(x=-10, y=10), end=Point2D(x=10, y=-10)),
+            LineSegment2D(start=Point2D(x=10, y=-10), end=Point2D(x=-10, y=-10)),
+        ]
+    )
+    zero_area = profile_document(
+        segments=[
+            LineSegment2D(start=Point2D(x=0, y=0), end=Point2D(x=10, y=0)),
+            LineSegment2D(start=Point2D(x=10, y=0), end=Point2D(x=20, y=0)),
+            LineSegment2D(start=Point2D(x=20, y=0), end=Point2D(x=0, y=0)),
+        ]
+    )
+
+    assert any(
+        issue.code == "profile_not_continuous"
+        for issue in DesignValidator().validate(discontinuous).issues
+    )
+    assert any(
+        issue.code == "profile_self_intersection"
+        for issue in DesignValidator().validate(bow_tie).issues
+    )
+    assert any(
+        issue.code == "profile_zero_area"
+        for issue in DesignValidator().validate(zero_area).issues
+    )
+
+
+def test_profile_hole_outside_outline_is_error():
+    report = DesignValidator().validate(
+        profile_document(holes=[HoleFeature(x=28, y=0, diameter=6)])
+    )
+
+    assert not report.valid
+    assert any(issue.code == "hole_outside_profile" for issue in report.issues)
+
+
+def test_large_profile_arc_tessellation_has_a_hard_upper_bound():
+    doc = profile_document(
+        segments=[
+            ArcSegment2D(
+                start=Point2D(x=0, y=-100_000),
+                mid=Point2D(x=100_000, y=0),
+                end=Point2D(x=0, y=100_000),
+            ),
+            LineSegment2D(start=Point2D(x=0, y=100_000), end=Point2D(x=0, y=-100_000)),
+        ]
+    )
+
+    assert len(loop_polyline(doc.base.outer)) <= ARC_MAX_SEGMENTS + 2

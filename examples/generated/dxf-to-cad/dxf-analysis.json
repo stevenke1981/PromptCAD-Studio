@@ -1,0 +1,127 @@
+{
+  "analysis_version": "1.0",
+  "provenance": {
+    "dxf_sha256": "e983d1fc773888ba627918082a57fcbb0ecc63621fd90b5477ebcd467f47653d",
+    "canonical_geometry_sha256": "a0ee4dee867bdbb0b24299bc78fd599de01f688709b47a54779e75aa8befa9e3",
+    "dxf_format": "ASCII",
+    "byte_length": 19333,
+    "dxf_version": "AC1024",
+    "parser_name": "ezdxf",
+    "parser_version": "1.4.4",
+    "entity_total": 8,
+    "insunits": 4,
+    "source_unit": "mm",
+    "unit_scale_to_mm": 1.0
+  },
+  "entity_counts": {
+    "lines": 2,
+    "arcs": 2,
+    "circles": 4,
+    "lwpolylines": 0,
+    "polylines": 0,
+    "ignored_annotations": 0
+  },
+  "outer_profile": {
+    "segments": [
+      {
+        "kind": "line",
+        "start": {
+          "x": 10.0,
+          "y": 0.0
+        },
+        "end": {
+          "x": 90.0,
+          "y": 0.0
+        }
+      },
+      {
+        "kind": "arc",
+        "start": {
+          "x": 90.0,
+          "y": 0.0
+        },
+        "mid": {
+          "x": 110.0,
+          "y": 19.999999999999996
+        },
+        "end": {
+          "x": 90.0,
+          "y": 40.0
+        }
+      },
+      {
+        "kind": "line",
+        "start": {
+          "x": 90.0,
+          "y": 40.0
+        },
+        "end": {
+          "x": 10.0,
+          "y": 40.0
+        }
+      },
+      {
+        "kind": "arc",
+        "start": {
+          "x": 10.000000000000002,
+          "y": 40.0
+        },
+        "mid": {
+          "x": -10.0,
+          "y": 20.000000000000004
+        },
+        "end": {
+          "x": 9.999999999999996,
+          "y": 0.0
+        }
+      }
+    ]
+  },
+  "holes": [
+    {
+      "id": "circle-01",
+      "center": {
+        "x": 20.0,
+        "y": 15.0
+      },
+      "radius_mm": 2.5
+    },
+    {
+      "id": "circle-02",
+      "center": {
+        "x": 40.0,
+        "y": 25.0
+      },
+      "radius_mm": 2.5
+    },
+    {
+      "id": "circle-03",
+      "center": {
+        "x": 60.0,
+        "y": 15.0
+      },
+      "radius_mm": 2.5
+    },
+    {
+      "id": "circle-04",
+      "center": {
+        "x": 80.0,
+        "y": 25.0
+      },
+      "radius_mm": 2.5
+    }
+  ],
+  "symmetry": {
+    "axes": [
+      "rotational_180"
+    ],
+    "tolerance_mm": 0.00011999999999999999
+  },
+  "review_required": true,
+  "convertible": true,
+  "warnings": [
+    "DXF 幾何已轉為可編輯 Feature Tree；輸出 CAD 前必須人工確認。"
+  ],
+  "feature_tree_file": "dxf-feature-tree.json",
+  "provenance_verification": "verified-before-generation"
+}

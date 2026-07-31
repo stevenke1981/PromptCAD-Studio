@@ -72,6 +72,31 @@
         <button id="analyze-image" class="secondary full" type="button">分析圖片並建立 Feature Tree</button>
       </section>
 
+      <section class="dxf-import">
+        <div>
+          <div class="eyebrow">DXF → 特徵樹</div>
+          <h2>DXF 轉 CAD</h2>
+        </div>
+        <p>上傳受限的 2D DXF。系統會讀取外框與圓孔、轉為可編輯特徵樹，確認後才輸出 CAD。</p>
+        <label>選擇 DXF 檔
+          <input id="dxf-file" type="file" accept=".dxf,application/dxf,image/vnd.dxf" />
+        </label>
+        <div class="image-fields">
+          <label>零件厚度（mm）
+            <input id="dxf-thickness" type="number" min="0.01" step="0.01" value="5" />
+          </label>
+          <label>來源單位
+            <select id="dxf-units">
+              <option value="auto">自動偵測（INSUNITS）</option>
+              <option value="mm">毫米（mm）</option>
+              <option value="inch">英吋（inch）</option>
+              <option value="cm">公分（cm）</option>
+            </select>
+          </label>
+        </div>
+        <button id="analyze-dxf" class="secondary full" type="button">分析 DXF 並建立特徵樹</button>
+      </section>
+
       <div class="examples">
         <span>快速範例：</span>
         <button data-example="做一個墊圈，外徑30mm、內徑15mm、厚5mm。">墊圈</button>
@@ -101,9 +126,9 @@
         <button id="regenerate" class="secondary full" type="button">套用 JSON 並重新輸出</button>
       </details>
       <details id="feature-tree-panel" hidden>
-        <summary>影像 Feature Tree</summary>
+        <summary id="feature-tree-summary">特徵樹</summary>
         <textarea id="feature-tree" class="spec-editor" rows="16" spellcheck="false">[]</textarea>
-        <button id="generate-feature-tree" class="secondary full" type="button">確認 Feature Tree 並輸出 CAD</button>
+        <button id="generate-feature-tree" class="secondary full" type="button">確認特徵樹並輸出 CAD</button>
       </details>
     </section>
   </main>

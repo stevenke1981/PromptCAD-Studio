@@ -19,9 +19,17 @@ const imageThicknessEl = $('#image-thickness');
 const featureTreePanel = $('#feature-tree-panel');
 const featureTreeEl = $('#feature-tree');
 const generateFeatureTreeBtn = $('#generate-feature-tree');
+const featureTreeSummary = $('#feature-tree-summary');
+const analyzeDxfBtn = $('#analyze-dxf');
+const dxfFileEl = $('#dxf-file');
+const dxfThicknessEl = $('#dxf-thickness');
+const dxfUnitsEl = $('#dxf-units');
 let activePreviewUrl = null;
 let activeImageHash = null;
 let activeImageAnalysis = null;
+let activeDxfAnalysis = null;
+let activeFeatureSource = null;
+let analysisRequestVersion = 0;
 
 function authHeaders(includeJson = true) {
   const out = {};
@@ -44,12 +52,27 @@ function setBadge(text, kind) {
   badge.className = `badge ${kind}`;
 }
 
-function clearImageAnalysisState() {
+function deactivateFeatureTree() {
   activeImageHash = null;
   activeImageAnalysis = null;
+  activeDxfAnalysis = null;
+  activeFeatureSource = null;
   featureTreeEl.value = '[]';
   featureTreePanel.hidden = true;
+  featureTreeSummary.textContent = '特徵樹';
   generateFeatureTreeBtn.disabled = true;
+}
+
+function clearFeatureTreeState() {
+  analysisRequestVersion += 1;
+  analyzeImageBtn.disabled = false;
+  analyzeDxfBtn.disabled = false;
+  deactivateFeatureTree();
+  if (activePreviewUrl) {
+    URL.revokeObjectURL(activePreviewUrl);
+    activePreviewUrl = null;
+  }
+  previewEl.removeAttribute('src');
   specEl.value = '{}';
   partName.textContent = '尚未生成';
   downloadsEl.innerHTML = '';
@@ -144,7 +167,10 @@ function showImageAnalysis(data) {
   featureTreeEl.value = JSON.stringify(data.feature_tree, null, 2);
   activeImageHash = data.image_sha256;
   activeImageAnalysis = data;
+  activeDxfAnalysis = null;
+  activeFeatureSource = 'image';
   featureTreePanel.hidden = false;
+  featureTreeSummary.textContent = '影像特徵樹';
   setBadge(data.convertible ? 'REVIEW' : 'BLOCKED', data.convertible ? 'warn' : 'fail');
 
   warningsEl.innerHTML = '';
@@ -176,11 +202,50 @@ function showImageAnalysis(data) {
   generateFeatureTreeBtn.disabled = !data.convertible;
 }
 
-function showManifest(data) {
-  partName.textContent = data.spec.name;
-  featureTreePanel.hidden = true;
+function showDxfAnalysis(data) {
+  partName.textContent = data.proposed_spec?.name || 'DXF 特徵候選';
+  specEl.value = data.proposed_spec ? JSON.stringify(data.proposed_spec, null, 2) : '{}';
+  featureTreeEl.value = JSON.stringify(data.feature_tree, null, 2);
   activeImageHash = null;
   activeImageAnalysis = null;
+  activeDxfAnalysis = data;
+  activeFeatureSource = 'dxf';
+  featureTreePanel.hidden = false;
+  featureTreeSummary.textContent = 'DXF 特徵樹';
+  setBadge(data.convertible ? 'REVIEW' : 'BLOCKED', data.convertible ? 'warn' : 'fail');
+
+  warningsEl.innerHTML = '';
+  const messages = [
+    ...data.warnings,
+    ...(data.validation?.issues || []).map((issue) => issue.message),
+  ];
+  for (const text of [...new Set(messages)]) {
+    const item = document.createElement('div');
+    item.className = 'warning';
+    item.textContent = text;
+    warningsEl.appendChild(item);
+  }
+  downloadsEl.innerHTML = '';
+
+  if (data.preview_svg) {
+    if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl);
+    activePreviewUrl = URL.createObjectURL(
+      new Blob([data.preview_svg], {type: 'image/svg+xml'}),
+    );
+    previewEl.src = activePreviewUrl;
+    previewEl.hidden = false;
+    previewEmpty.hidden = true;
+  } else {
+    previewEl.hidden = true;
+    previewEmpty.hidden = false;
+    previewEmpty.textContent = '目前無法建立候選預覽，請檢查 DXF 幾何與單位。';
+  }
+  generateFeatureTreeBtn.disabled = !data.convertible;
+}
+
+function showManifest(data) {
+  partName.textContent = data.spec.name;
+  deactivateFeatureTree();
   specEl.value = JSON.stringify(data.spec, null, 2);
   setBadge(
     data.validation.review_required ? 'REVIEW' : data.status.toUpperCase(),
@@ -269,7 +334,8 @@ analyzeImageBtn.addEventListener('click', async () => {
     return;
   }
 
-  clearImageAnalysisState();
+  clearFeatureTreeState();
+  const requestVersion = analysisRequestVersion;
   const body = new FormData();
   body.append('image', file);
   body.append('known_length_mm', String(knownLength));
@@ -279,6 +345,7 @@ analyzeImageBtn.addEventListener('click', async () => {
   setBadge('ANALYZING', 'neutral');
   try {
     const data = await api('/api/v1/image-analysis', {method: 'POST', body});
+    if (requestVersion !== analysisRequestVersion) return;
     showImageAnalysis(data);
     setStatus(
       data.convertible
@@ -287,19 +354,63 @@ analyzeImageBtn.addEventListener('click', async () => {
       !data.convertible,
     );
   } catch (error) {
-    clearImageAnalysisState();
+    if (requestVersion !== analysisRequestVersion) return;
+    clearFeatureTreeState();
     setStatus(`圖片分析失敗：${error.message}`, true);
     setBadge('FAILED', 'fail');
   } finally {
-    analyzeImageBtn.disabled = false;
+    if (requestVersion === analysisRequestVersion) analyzeImageBtn.disabled = false;
   }
 });
 
-imageFileEl.addEventListener('change', clearImageAnalysisState);
+imageFileEl.addEventListener('change', clearFeatureTreeState);
+
+analyzeDxfBtn.addEventListener('click', async () => {
+  const file = dxfFileEl.files[0];
+  const thickness = Number(dxfThicknessEl.value);
+  if (!file) {
+    setStatus('請先選擇 DXF 檔案。', true);
+    return;
+  }
+  if (!(thickness > 0)) {
+    setStatus('零件厚度必須大於 0。', true);
+    return;
+  }
+
+  clearFeatureTreeState();
+  const requestVersion = analysisRequestVersion;
+  const body = new FormData();
+  body.append('dxf', file);
+  body.append('thickness_mm', String(thickness));
+  body.append('unit_override', dxfUnitsEl.value);
+  analyzeDxfBtn.disabled = true;
+  setStatus('正在安全讀取 DXF、解析輪廓並建立特徵樹…');
+  setBadge('ANALYZING', 'neutral');
+  try {
+    const data = await api('/api/v1/dxf-analysis', {method: 'POST', body});
+    if (requestVersion !== analysisRequestVersion) return;
+    showDxfAnalysis(data);
+    setStatus(
+      data.convertible
+        ? 'DXF 分析完成：請檢查特徵樹，確認後再輸出 CAD。'
+        : 'DXF 分析完成，但幾何無法安全轉換，已停止輸出。',
+      !data.convertible,
+    );
+  } catch (error) {
+    if (requestVersion !== analysisRequestVersion) return;
+    clearFeatureTreeState();
+    setStatus(`DXF 分析失敗：${error.message}`, true);
+    setBadge('FAILED', 'fail');
+  } finally {
+    if (requestVersion === analysisRequestVersion) analyzeDxfBtn.disabled = false;
+  }
+});
+
+dxfFileEl.addEventListener('change', clearFeatureTreeState);
 
 generateFeatureTreeBtn.addEventListener('click', async () => {
-  if (!activeImageHash) {
-    setStatus('請先分析圖片。', true);
+  if (!activeFeatureSource) {
+    setStatus('請先分析圖片或 DXF。', true);
     return;
   }
   if (!formats().length) {
@@ -315,23 +426,29 @@ generateFeatureTreeBtn.addEventListener('click', async () => {
   }
 
   generateFeatureTreeBtn.disabled = true;
-  setStatus('正在驗證 Feature Tree 並輸出 CAD…');
+  setStatus('正在驗證特徵樹並輸出 CAD…');
   setBadge('RUNNING', 'neutral');
   try {
-    const data = await api('/api/v1/generate-from-image-feature-tree', {
+    const isDxf = activeFeatureSource === 'dxf';
+    const data = await api(
+      isDxf
+        ? '/api/v1/generate-from-dxf-feature-tree'
+        : '/api/v1/generate-from-image-feature-tree',
+      {
       method: 'POST',
       body: JSON.stringify({
-        analysis: activeImageAnalysis,
+        analysis: isDxf ? activeDxfAnalysis : activeImageAnalysis,
         feature_tree: featureTree,
         formats: formats(),
         render: true,
       }),
-    });
+      },
+    );
     showManifest(data);
     setStatus(`完成：${data.renderer_used} / ${data.status}`);
     await loadJobs();
   } catch (error) {
-    setStatus(`Feature Tree 輸出失敗：${error.message}`, true);
+    setStatus(`特徵樹輸出失敗：${error.message}`, true);
     setBadge('FAILED', 'fail');
   } finally {
     generateFeatureTreeBtn.disabled = false;

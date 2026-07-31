@@ -1,12 +1,13 @@
 evaluated_at: 2026-07-31
 autonomy: recommend_only
-selected: Restricted DXF closed-profile and circular-hole to 3D extrusion
+selected: CadBackend capability contract and cross-backend conformance suite
 evidence:
-  - The owner defined 2D engineering drawing to 3D as phase four.
-  - The calibrated raster image-to-Feature-Tree phase-three slice is accepted.
+  - The restricted DXF-to-Feature-Tree phase-four slice is accepted.
+  - The roadmap identifies a formal backend contract as the first phase-five milestone.
+  - CadQuery and OpenSCAD already share DSL semantics but do not expose a common capability registry.
 scope_candidate:
-  - Upload a bounded ASCII or binary DXF with units
-  - Extract one closed line and arc profile plus circular holes
-  - Produce an editable Feature Tree with an explicit extrusion thickness
-  - Reuse CadDocument validation and all CAD output formats
-reason_not_implemented: Phase four is a separate file-format and free-profile change that needs a new bounded request and DSL decision.
+  - Define backend capabilities, supported features, formats, and provenance
+  - Add a backend registry without changing existing public generation behavior
+  - Build conformance fixtures for CadQuery and OpenSCAD
+  - Prepare bounded adapters for Build123d and FreeCAD
+reason_not_implemented: This is a separate architecture change that needs an ADR, compatibility plan, and expanded cross-backend regression scope.

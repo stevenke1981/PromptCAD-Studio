@@ -3,7 +3,7 @@ from __future__ import annotations
 import io
 import zipfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
@@ -11,7 +11,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 from app.core.security import require_api_token, safe_job_file, validate_job_id
 from app.models.api import (
     CapabilityResponse,
+    DxfFeatureTreeToSpecRequest,
     FeatureTreeToSpecRequest,
+    GenerateFromDxfFeatureTreeRequest,
     GenerateFromImageFeatureTreeRequest,
     GenerateFromSpecRequest,
     GenerateRequest,
@@ -21,6 +23,7 @@ from app.models.api import (
     PlanResponse,
 )
 from app.models.cad import CadDocument, ValidationReport
+from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_token)])
@@ -41,7 +44,7 @@ async def capabilities(request: Request):
     settings = request.app.state.settings
     return CapabilityResponse(
         planners=["auto", "agent", "rule", "llm"],
-        base_features=["plate", "cylinder", "ring", "l_bracket", "enclosure"],
+        base_features=["plate", "cylinder", "ring", "l_bracket", "enclosure", "profile_extrusion"],
         feature_types=["hole", "rectangular_cutout", "fillet", "chamfer"],
         hole_types=["through", "blind", "clearance", "tapped", "counterbore", "countersink"],
         formats=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
@@ -49,6 +52,9 @@ async def capabilities(request: Request):
         openscad_available=service.renderer.openscad_available(),
         image_analysis_available=True,
         image_formats=["png", "jpeg"],
+        dxf_analysis_available=True,
+        dxf_entities=["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"],
+        dxf_units=["auto", "mm", "inch", "cm"],
         configured_planner_mode=settings.planner_mode,
         configured_render_backend=settings.render_backend,
     )
@@ -132,6 +138,55 @@ async def generate_from_image_feature_tree(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/dxf-analysis", response_model=DxfAnalysisResponse)
+async def dxf_analysis(
+    request: Request,
+    dxf: Annotated[UploadFile, File()],
+    thickness_mm: Annotated[float, Form(gt=0, le=100_000)],
+    unit_override: Annotated[Literal["auto", "mm", "inch", "cm"], Form()] = "auto",
+):
+    try:
+        return await _service(request).analyze_dxf_upload(
+            dxf,
+            thickness_mm=thickness_mm,
+            unit_override=unit_override,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        await dxf.close()
+
+
+@router.post("/dxf-feature-tree-to-spec", response_model=PlanResponse)
+async def dxf_feature_tree_to_spec(
+    request: Request,
+    body: DxfFeatureTreeToSpecRequest,
+):
+    try:
+        return _service(request).dxf_feature_tree_to_spec(
+            body.analysis,
+            body.feature_tree,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/generate-from-dxf-feature-tree", response_model=JobManifest)
+async def generate_from_dxf_feature_tree(
+    request: Request,
+    body: GenerateFromDxfFeatureTreeRequest,
+):
+    try:
+        return await _service(request).generate_from_dxf_feature_tree(
+            body.analysis,
+            body.feature_tree,
+            formats=body.formats,
+            render=body.render,
+        )
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/validate", response_model=ValidationReport)
 async def validate(request: Request, body: CadDocument):
     return _service(request).validate(body)
@@ -164,14 +219,21 @@ async def get_file(request: Request, job_id: str, filename: str):
 @router.get("/jobs/{job_id}/bundle.zip")
 async def bundle(request: Request, job_id: str):
     validate_job_id(job_id)
-    job_dir: Path = _service(request).storage.path(job_id)
+    service = _service(request)
+    job_dir: Path = service.storage.path(job_id)
     if not job_dir.is_dir():
         raise HTTPException(status_code=404, detail="Job not found")
+    manifest = service.get(job_id)
+    if manifest is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    filenames = ["manifest.json", *(artifact.filename for artifact in manifest.artifacts)]
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(job_dir.iterdir()):
-            if path.is_file() and not path.name.startswith(".tmp-"):
+        for filename in sorted(set(filenames)):
+            path = safe_job_file(job_dir, filename)
+            if path.is_file() and not path.is_symlink():
                 archive.write(path, arcname=path.name)
     buffer.seek(0)
     headers = {"Content-Disposition": f'attachment; filename="promptcad-{job_id}.zip"'}

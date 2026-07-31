@@ -8,9 +8,11 @@ from app.models.cad import (
     EnclosureBase,
     LBracketBase,
     PlateBase,
+    ProfileExtrusionBase,
     RingBase,
     SideFace,
 )
+from app.services.profile_geometry import loop_bounds, loop_polyline
 
 
 class EngineeringDrawingPdf:
@@ -52,8 +54,17 @@ class EngineeringDrawingPdf:
         left, bottom = cx - width / 2, cy - height / 2
         commands = [self._text(left, bottom + height + 16, 9, "TOP VIEW")]
         base = doc.base
+        origin_x, origin_y = 0.0, 0.0
 
-        if isinstance(base, (CylinderBase, RingBase)):
+        if isinstance(base, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(base.outer)
+            origin_x, origin_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+            points = [
+                (left + (x - min_x) * scale, bottom + (y - min_y) * scale)
+                for x, y in loop_polyline(base.outer)
+            ]
+            commands.append(self._polyline(points, close=True))
+        elif isinstance(base, (CylinderBase, RingBase)):
             commands.append(self._circle(cx, cy, width / 2))
             if isinstance(base, RingBase):
                 commands.append(self._circle(cx, cy, base.inner_diameter * scale / 2))
@@ -86,7 +97,7 @@ class EngineeringDrawingPdf:
         for hole in doc.holes:
             if hole.axis.value != "z":
                 continue
-            x, y = cx + hole.x * scale, cy + hole.y * scale
+            x, y = cx + (hole.x - origin_x) * scale, cy + (hole.y - origin_y) * scale
             radius = hole.diameter * scale / 2
             commands.extend(
                 [
@@ -144,11 +155,15 @@ class EngineeringDrawingPdf:
             self._text(left, bottom + height + 16, 9, "FRONT VIEW"),
             self._rect(left, bottom, width, height),
         ]
+        origin_x = 0.0
+        if isinstance(doc.base, ProfileExtrusionBase):
+            min_x, _, max_x, _ = loop_bounds(doc.base.outer)
+            origin_x = (min_x + max_x) / 2
         for hole in doc.holes:
             if hole.axis.value == "y":
                 commands.append(
                     self._circle(
-                        cx + hole.x * scale,
+                        cx + (hole.x - origin_x) * scale,
                         bottom + hole.z * scale,
                         hole.diameter * scale / 2,
                     )
@@ -196,11 +211,15 @@ class EngineeringDrawingPdf:
             self._text(left, bottom + height + 16, 9, "RIGHT VIEW"),
             self._rect(left, bottom, width, height),
         ]
+        origin_y = 0.0
+        if isinstance(doc.base, ProfileExtrusionBase):
+            _, min_y, _, max_y = loop_bounds(doc.base.outer)
+            origin_y = (min_y + max_y) / 2
         for hole in doc.holes:
             if hole.axis.value == "x":
                 commands.append(
                     self._circle(
-                        cx + hole.y * scale,
+                        cx + (hole.y - origin_y) * scale,
                         bottom + hole.z * scale,
                         hole.diameter * scale / 2,
                     )
@@ -285,6 +304,14 @@ class EngineeringDrawingPdf:
         return f"{x:.2f} {y:.2f} {width:.2f} {height:.2f} re S"
 
     @staticmethod
+    def _polyline(points: list[tuple[float, float]], close: bool = False) -> str:
+        if not points:
+            return ""
+        command = f"{points[0][0]:.2f} {points[0][1]:.2f} m"
+        command += "".join(f" {x:.2f} {y:.2f} l" for x, y in points[1:])
+        return command + (" h S" if close else " S")
+
+    @staticmethod
     def _circle(cx: float, cy: float, radius: float) -> str:
         k = radius * 0.5522847498
         return (
@@ -320,6 +347,9 @@ class EngineeringDrawingPdf:
             return base.outer_diameter, base.outer_diameter, base.height
         if isinstance(base, LBracketBase):
             return base.width, base.depth, base.vertical_height + base.thickness
+        if isinstance(base, ProfileExtrusionBase):
+            min_x, min_y, max_x, max_y = loop_bounds(base.outer)
+            return max_x - min_x, max_y - min_y, base.thickness
         return base.length, base.width, base.height
 
     @staticmethod

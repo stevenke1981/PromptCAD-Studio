@@ -1,5 +1,18 @@
 # Release Notes
 
+## v0.3.0 — 2026-07-31
+
+第四階段受限 DXF 工程圖轉 3D：
+
+- ASCII／AutoCAD Binary DXF 內容辨識，支援 mm／inch／cm 與無單位手動覆寫。
+- modelspace LINE、ARC、CIRCLE、closed LWPOLYLINE、2D POLYLINE 白名單；blocks、SPLINE、HATCH、ELLIPSE、3D 與多重／開放輪廓 fail closed。
+- `CadDocument 1.1 profile_extrusion`，保留 line 與 exact three-point arc，圓孔轉為 Z 軸 through hole。
+- 可編輯 DXF Feature Tree、對稱報告、來源與正規化幾何 SHA-256、人工確認與 HMAC provenance。
+- CadQuery、OpenSCAD、SVG 與工程圖 PDF 支援自由閉合輪廓；OpenSCAD／validation 圓弧取樣有硬上限。
+- Web DXF 上傳與 Feature Tree 編輯、REST 三個 DXF 端點、CLI `promptcad dxf`。
+- multipart 前置 body／併發限制、一次性 parser worker、timeout、父程序暫存檔清理、實體／線段／孔與 response 上限。
+- 原始 DXF 與上傳檔名不保存；ZIP 只依 manifest allowlist 打包。
+
 ## v0.2.0 — 2026-07-31
 
 第三階段校準圖片／草圖轉 CAD：

@@ -45,11 +45,11 @@ legend { color:var(--muted); font-size:.82rem; padding:0 8px; }
 .status.error { color:var(--danger); }
 .examples { display:flex; gap:8px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:.82rem; }
 .examples button, .secondary { background:transparent; padding:7px 10px; font-size:.78rem; }
-.image-import { border:1px solid var(--line); border-radius:14px; margin:16px 0; padding:14px; background:rgba(9,14,26,.55); }
-.image-import h2 { font-size:1.08rem; }
-.image-import p { color:var(--muted); font-size:.84rem; line-height:1.5; }
-.image-import > label, .image-fields label { display:block; color:var(--muted); font-size:.82rem; font-weight:700; }
-.image-import input { margin-top:7px; }
+.image-import, .dxf-import { border:1px solid var(--line); border-radius:14px; margin:16px 0; padding:14px; background:rgba(9,14,26,.55); }
+.image-import h2, .dxf-import h2 { font-size:1.08rem; }
+.image-import p, .dxf-import p { color:var(--muted); font-size:.84rem; line-height:1.5; }
+.image-import > label, .dxf-import > label, .image-fields label { display:block; color:var(--muted); font-size:.82rem; font-weight:700; }
+.image-import input, .dxf-import input { margin-top:7px; }
 .image-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
 .result-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
 .badge { border:1px solid var(--line); padding:7px 10px; border-radius:999px; font-size:.72rem; font-weight:900; letter-spacing:.08em; }

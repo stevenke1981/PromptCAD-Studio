@@ -1,0 +1,50 @@
+change_id: CHANGE-005
+status: passed
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 79 passed
+  coverage: 82 percent
+  lint: Ruff passed
+  compile: compileall passed
+  dependency_audit: no known vulnerabilities
+  cli_acceptance:
+    status: PASS
+    flow: analyze line-and-arc DXF -> review Feature Tree -> confirm -> render STEP
+    source_units: mm
+    profile_segments:
+      lines: 2
+      arcs: 2
+    holes: 4
+    cadquery: completed
+    step:
+      solids: 1
+      size_mm: [120, 40, 6]
+      cylindrical_face_radii_mm: [2.5, 2.5, 2.5, 2.5, 20, 20]
+      verified_hole_faces: 4
+  web_acceptance:
+    status: PASS
+    flow: upload DXF -> inspect editable Feature Tree -> confirm -> CAD downloads
+    visible_status: "完成：cadquery / completed"
+    download_links: 14
+    console_errors: 0
+    page_errors: 0
+    stale_response_guard: PASS
+    screenshot: examples/generated/dxf-to-cad/web-acceptance.png
+  safety:
+    - request-body and concurrency limits apply before multipart parsing
+    - parser executes in a one-shot subprocess with timeout, bounded stdout, fixed cwd, and an environment allowlist
+    - document entity, modelspace entity, segment, hole, byte, and tessellation limits fail closed
+    - unsupported, non-planar, open, multi-profile, and non-finite geometry is rejected
+    - raw DXF bytes and untrusted upload filenames are not persisted in job artifacts
+    - HMAC-bound provenance is verified before Feature Tree conversion and generation
+    - ZIP output includes only manifest-listed artifacts
+    - delayed image or DXF analysis cannot overwrite a newer upload selection
+  provenance:
+    planner_used: dxf-feature-tree
+    artifacts:
+      - dxf-analysis.json
+      - dxf-feature-tree.json

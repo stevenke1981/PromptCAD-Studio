@@ -49,6 +49,8 @@
 
 ## 第四階段：2D 工程圖轉 3D
 
+狀態：受限 DXF 單一閉合輪廓 + 圓孔 → 拉伸 3D 垂直切片已完成。
+
 輸入 DXF／工程圖 PDF，辨識：
 
 - 對稱與中心線。
@@ -58,6 +60,8 @@
 - 多視圖對應及尺寸約束。
 
 輸出可編輯 Feature Tree、CadDocument 與 STEP；有歧義時產生多個候選並要求覆核。
+
+目前切片已具備：ASCII／binary DXF 安全辨識、mm／inch／cm 單位、LINE／ARC／closed LWPOLYLINE／2D POLYLINE 外框、CIRCLE 圓孔、線與三點圓弧正規化、對稱報告、可編輯 Feature Tree、CadDocument 1.1、CadQuery／OpenSCAD／SVG／PDF 輸出、一次性解析 worker、來源 HMAC 與人工確認。下一步擴充工程圖 PDF、多視圖、旋轉、陣列、倒角、圓角與尺寸約束。
 
 ## 第五階段：可擴充規劃器與多 CAD 後端
 
@@ -77,4 +81,4 @@ LLM 只負責產生受控 DSL，不直接執行任意 CAD 程式碼。每個後�
 
 ## 下一個建議里程碑
 
-第四階段先建立「受限 DXF 單一閉合輪廓 + 圓孔 → 拉伸 3D」垂直切片，沿用本階段 Feature Tree、人工確認與驗證閘門，再逐步加入旋轉、陣列與多視圖。
+第五階段先建立正式 `CadBackend` 能力合約、後端 registry、provenance 與跨後端 conformance suite，再加入 Build123d 與 FreeCAD 開源後端；Fusion 360／SolidWorks 以外部 adapter 隔離授權與執行環境。
