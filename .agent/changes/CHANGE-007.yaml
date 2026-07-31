@@ -1,0 +1,37 @@
+id: CHANGE-007
+type: architecture_change
+risk: medium
+objective: Complete the Phase 6 durable asynchronous queue, cancellable worker, and OS-isolated deployment vertical slice.
+scope:
+  - SQLite WAL queue for prompt and edited-spec jobs
+  - Atomic claims, worker leases, heartbeat, bounded retry, and crash recovery
+  - Cooperative cancellation through planning, validation, materialization, and renderer process-tree termination
+  - Async REST endpoints with HTTP 202, status, list, result linkage, and cancellation
+  - CLI enqueue, queue inspection, cancellation, and independent promptcad-worker executable
+  - Web background mode, visible progress, cancellation, and reload recovery
+  - Docker worker service and hardened no-network override
+protected_behavior:
+  - Existing synchronous REST, CLI, and Web generation remains the default and compatible
+  - Existing manifest, artifact, hash, backend, and fallback contracts remain authoritative
+  - CadDocument validation remains the only path into a CAD runtime
+  - Existing Phase 1 through Phase 5 user flows remain green
+acceptance:
+  - A prompt can be queued, claimed by an independent worker, completed, and resolved to an existing manifest
+  - An edited spec can use the same durable path
+  - Queued and running work can be cancelled without publishing a false completed result
+  - Only one worker can claim a queue job and an expired lease can recover within the retry limit
+  - Web can submit, display queue state, cancel, reload, and recover the active job ID
+  - Hardened Compose configuration places the CAD worker on no outbound network with a read-only root and resource limits
+status: accepted
+evidence:
+  - 142 pytest tests passed with 81 percent app coverage
+  - Ruff, compileall, JavaScript syntax, and YAML parsing passed
+  - Web queued job survived reload, cancelled safely, and cleared its persisted queue ID
+  - Web offline recovery and missing queue ID flows did not lock generation controls
+  - Independent worker completed a queued prompt and exposed the existing manifest through result_url
+  - CLI async-generate, promptcad-worker --once, and queue-status completed one durable job
+  - Reviewer found zero remaining critical, high, medium, or low findings
+limitations:
+  - Docker executable is unavailable on the acceptance host, so Compose runtime startup is manual-required
+  - SQLite is single-host and has no tenant fairness or automatic retention policy
+  - The hardened profile is service-level rather than one fresh sandbox per job

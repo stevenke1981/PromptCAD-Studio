@@ -12,7 +12,12 @@ from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings
 from app.models.api import GenerateFromSpecRequest, GenerateRequest
-from app.services.async_queue import AsyncJobQueue, ClaimedQueueJob
+from app.services.async_queue import (
+    AsyncJobQueue,
+    ClaimedQueueJob,
+    QueueJobNotFound,
+    QueuePayloadError,
+)
 from app.services.cancellation import JobCancelled
 from app.services.job_service import JobService
 
@@ -37,7 +42,11 @@ class AsyncJobWorker:
         self.service.close()
 
     def process_next(self) -> bool:
-        claimed = self.queue.claim(self.worker_id)
+        try:
+            claimed = self.queue.claim(self.worker_id)
+        except QueuePayloadError:
+            # claim() already moved this malformed row to failed.
+            return True
         if claimed is None:
             return False
         heartbeat_stop = threading.Event()
@@ -51,18 +60,16 @@ class AsyncJobWorker:
         try:
             self._process(claimed)
         except JobCancelled:
-            self.queue.mark_cancelled(claimed.queue_job_id, self.worker_id)
+            self._mark_cancelled_if_owned(claimed.queue_job_id)
         except (ValidationError, ValueError) as exc:
-            self.queue.fail(
+            self._fail_if_owned(
                 claimed.queue_job_id,
-                self.worker_id,
                 f"Invalid queued request: {exc}",
                 retry=False,
             )
         except Exception as exc:
-            self.queue.fail(
+            self._fail_if_owned(
                 claimed.queue_job_id,
-                self.worker_id,
                 f"Worker execution failed: {exc}",
                 retry=True,
             )
@@ -107,24 +114,46 @@ class AsyncJobWorker:
         else:
             raise ValueError(f"Unsupported queued job kind: {claimed.kind}")
         if manifest.status == "cancelled" or cancel_check():
-            self.queue.mark_cancelled(
+            terminal = self.queue.mark_cancelled(
                 claimed.queue_job_id,
                 self.worker_id,
                 manifest.job_id,
             )
         elif manifest.status == "failed":
-            self.queue.mark_failed(
+            terminal = self.queue.mark_failed(
                 claimed.queue_job_id,
                 self.worker_id,
                 manifest.error or "CAD generation failed",
                 manifest.job_id,
             )
         else:
-            self.queue.complete(
+            terminal = self.queue.complete(
                 claimed.queue_job_id,
                 self.worker_id,
                 manifest.job_id,
             )
+        if terminal.status == "cancelled" and manifest.status != "cancelled":
+            self.service.mark_cancelled(manifest)
+
+    def _mark_cancelled_if_owned(self, queue_job_id: str) -> None:
+        try:
+            self.queue.mark_cancelled(queue_job_id, self.worker_id)
+        except (RuntimeError, QueueJobNotFound):
+            # A recovered lease belongs to another worker; this worker must stop
+            # publishing state without terminating the worker process.
+            return
+
+    def _fail_if_owned(self, queue_job_id: str, error: str, *, retry: bool) -> None:
+        try:
+            self.queue.fail(
+                queue_job_id,
+                self.worker_id,
+                error,
+                retry=retry,
+            )
+        except (RuntimeError, QueueJobNotFound):
+            # Lease ownership can change while native CAD code is still exiting.
+            return
 
     def _heartbeat_loop(self, queue_job_id: str, stop: threading.Event) -> None:
         interval = max(1.0, self.settings.async_queue_lease_seconds / 3)

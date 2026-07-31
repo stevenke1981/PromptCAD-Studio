@@ -16,3 +16,4 @@ dependencies:
       - pillow>=11,<13
       - python-multipart>=0.0.20,<1
       - ezdxf>=1.4.4,<2
+      - pypdfium2>=5.11,<6

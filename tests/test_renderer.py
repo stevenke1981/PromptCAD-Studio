@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import Settings
+from app.services.cancellation import JobCancelled
 from app.services.renderer import Renderer
 
 
@@ -153,6 +154,39 @@ def test_renderer_timeout_terminates_spawned_process_tree(tmp_path):
 
     with pytest.raises(RuntimeError, match="timed out"):
         renderer._run([sys.executable, "-c", parent_code], tmp_path)
+
+    time.sleep(1.2)
+    assert not marker.exists()
+
+
+def test_renderer_cancellation_terminates_spawned_process_tree(tmp_path) -> None:
+    marker = tmp_path / "cancel-descendant-marker.txt"
+    child_code = (
+        "import time; from pathlib import Path; "
+        "time.sleep(1.0); "
+        f"Path({str(marker)!r}).write_text('leaked', encoding='utf-8')"
+    )
+    parent_code = (
+        "import subprocess, sys, time; "
+        f"subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+        "time.sleep(10)"
+    )
+    renderer = Renderer(
+        Settings(
+            env="test",
+            data_dir=tmp_path,
+            render_backend="cadquery",
+            allow_source_fallback=False,
+        )
+    )
+    deadline = time.monotonic() + 0.2
+
+    with pytest.raises(JobCancelled, match="cancelled"):
+        renderer._run(
+            [sys.executable, "-c", parent_code],
+            tmp_path,
+            lambda: time.monotonic() >= deadline,
+        )
 
     time.sleep(1.2)
     assert not marker.exists()

@@ -1,4 +1,4 @@
-id: BASELINE-20260731-006
+id: BASELINE-20260731-007
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -19,6 +19,10 @@ accepted_features:
   - Build123d opt-in STEP and STL runner
   - Neutral STEP packaging for Fusion 360 and SOLIDWORKS host adapters
   - Post-execution backend provenance, fallback diagnostics, and artifact hashes
+  - Durable asynchronous prompt and edited-spec queue with independent worker
+  - Atomic claim, lease, heartbeat, bounded retry, crash recovery, and cancellation
+  - REST, CLI, and Web queue clients with reload recovery and result manifest linkage
+  - Hardened no-network Docker worker deployment profile
 critical_user_flows:
   - Chinese prompt to validated DSL and downloadable artifacts
   - Edited DSL to regenerated artifacts
@@ -26,6 +30,8 @@ critical_user_flows:
   - Calibrated top-view image to reviewed Feature Tree and downloadable CAD artifacts
   - Bounded DXF to reviewed Feature Tree and downloadable CAD artifacts
   - Selected desktop adapter to validated neutral STEP and downloadable host bundle
+  - Background prompt to durable queue, independent worker, and downloadable artifacts
+  - Reloaded Web session to recovered queue status and safe cancellation
 protected_behavior:
   - Unknown DSL fields are rejected
   - Generated code is deterministic and does not execute prompt text
@@ -36,6 +42,9 @@ protected_behavior:
   - Backend IDs are selected from a closed server allowlist
   - Missing or invalid renderer outputs cannot be reported as completed
   - Exact backends cannot silently omit requested fillets or chamfers
+  - Only the lease-owning worker can publish a queue transition
+  - A cancellation that wins before terminal publication cannot expose a completed manifest
+  - Missing or unauthorized queue polling does not permanently lock Web controls or discard recoverable state
 public_interfaces:
   - CadDocument schema_version 1.0
   - CadDocument schema_version 1.1 profile_extrusion
@@ -49,6 +58,12 @@ public_interfaces:
   - POST /api/v1/generate-from-dxf-feature-tree
   - GET /api/v1/capabilities backend and planner contracts
   - backend selection on generation endpoints and CLI commands
+  - POST /api/v1/async/generate
+  - POST /api/v1/async/generate-from-spec
+  - GET /api/v1/async/jobs and /api/v1/async/jobs/{queue_job_id}
+  - POST /api/v1/async/jobs/{queue_job_id}/cancel
+  - promptcad async-generate, async-render, queue-list, queue-status, and queue-cancel
+  - promptcad-worker
 data_compatibility:
   - Existing CadDocument 1.0 files without cutouts remain valid
   - CadDocument 1.1 is required only for profile_extrusion
@@ -60,12 +75,13 @@ known_limitations:
   - Drawing PDF is a dimensioned draft, not a complete manufacturing drawing
   - Physical thread geometry is not generated
   - Docker, OpenSCAD executable, and Conda paths were not run locally
+  - Hardened Compose YAML passed static validation but Docker runtime was unavailable locally
   - Image extraction supports calibrated high-contrast top-view rectangles and circular holes only
   - Perspective, arbitrary contours, occlusion, and reflective photos require future calibration modes
   - DXF extraction supports one closed 2D modelspace line/arc profile and circular holes only
   - DXF blocks, annotations as geometry, multiple profiles, dimensions, arrays, and multi-view inference are not converted
 evidence:
-  - 128 pytest tests passed
+  - 142 pytest tests passed
   - app coverage 81 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
@@ -81,3 +97,7 @@ evidence:
   - CadQuery and Build123d STEP outputs matched one solid, 80 x 40 x 5 mm bounds, and equal volume
   - Fusion 360 Web selection packaged model.fusion360.py and validated model.step with zero console errors
   - Runtime fallback provenance, missing-output rejection, bounded streams, process-tree timeout, and strict STL validation passed
+  - Queue atomic claim, capacity, lease recovery, retry, malformed payload, cancellation race, API, CLI, and worker tests passed
+  - Web reload recovery, queued cancel, offline cancel, orphan cleanup, completed result, and 12 download links passed
+  - Independent CLI worker produced a completed result URL
+  - Phase 6 code review approved with zero remaining findings

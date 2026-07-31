@@ -62,7 +62,15 @@
         </div>
       </fieldset>
 
-      <button id="generate">產生 CAD</button>
+      <label class="async-option" for="async-mode">
+        <input id="async-mode" type="checkbox" />
+        背景佇列（可離開頁面、重新開啟後續傳，並可取消）
+      </label>
+      <div class="generate-actions">
+        <button id="generate">產生 CAD</button>
+        <button id="resume-job" class="secondary" type="button" hidden>重新連線</button>
+        <button id="cancel-job" class="danger" type="button" hidden>取消背景工作</button>
+      </div>
       <p id="status" class="status">準備完成。</p>
 
       <section class="image-import">
@@ -70,18 +78,25 @@
           <div class="eyebrow">IMAGE → FEATURE TREE</div>
           <h2>圖片／草圖轉 CAD</h2>
         </div>
-        <p>支援高對比、單一零件的正俯視 PNG/JPEG。請提供外框最長邊實際尺寸與零件厚度。</p>
-        <label>選擇圖片
-          <input id="image-file" type="file" accept="image/png,image/jpeg" />
+        <p>支援高對比、單一零件的 PNG/JPEG、掃描圖與 PDF 頁面；矩形照片可選擇透視校正，自由閉合輪廓會建立可編輯折線 Feature Tree。</p>
+        <label>選擇圖片或 PDF
+          <input id="image-file" type="file" accept="image/png,image/jpeg,application/pdf,.pdf" />
         </label>
         <div class="image-fields">
-          <label>外框最長邊（mm）
+          <label>外框最長跨度（mm）
             <input id="known-length" type="number" min="0.01" step="0.01" value="100" />
           </label>
           <label>零件厚度（mm）
             <input id="image-thickness" type="number" min="0.01" step="0.01" value="5" />
           </label>
+          <label>PDF 頁碼（從 1 開始）
+            <input id="image-page" type="number" min="1" max="20" step="1" value="1" />
+          </label>
         </div>
+        <label class="perspective-option">
+          <input id="perspective-correction" type="checkbox" />
+          四角矩形板照片：執行透視校正（不適用真正的梯形零件）
+        </label>
         <button id="analyze-image" class="secondary full" type="button">分析圖片並建立 Feature Tree</button>
       </section>
 

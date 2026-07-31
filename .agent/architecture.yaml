@@ -1,5 +1,5 @@
 updated_at: 2026-07-31
-version: 0.4.0
+version: 0.5.0
 architecture:
   input_paths:
     - prompt via REST, CLI, or Web
@@ -98,6 +98,22 @@ architecture:
     - bounded stdout and stderr while the child is running
     - renderer process-tree termination on timeout or output overflow
     - path, symlink, and output signature verification before atomic promotion
+  async_execution:
+    queue: SQLite WAL at data_dir/.queue/promptcad.sqlite3
+    job_kinds: [prompt, spec]
+    states: [queued, running, completed, failed, cancelled]
+    delivery: atomic claim with lease, heartbeat, bounded retry, and crash recovery
+    cancellation: durable request flag and cooperative renderer process-tree termination
+    result_contract: existing JobManifest referenced by result_job_id
+    clients:
+      - async REST endpoints
+      - CLI async-generate, async-render, and queue commands
+      - Web background mode with reload recovery
+    sandbox_profile:
+      api_renderer: source_only
+      worker_network: none
+      root_filesystem: read_only
+      controls: [cap_drop_all, no_new_privileges, cpu, memory, pids]
   public_deployment_boundary:
     required:
       - isolated renderer worker
@@ -106,8 +122,11 @@ architecture:
       - read-only root filesystem
       - cgroup and seccomp or platform-equivalent OS sandbox
       - authentication, TLS, rate limits, tenant quotas, and retention policy
-    current_status: application controls exist but OS sandbox is not implemented
+    current_status: single-host hardened worker profile implemented; production multi-tenant policy remains deployment-owned
 accepted_evidence:
+  - 142 pytest tests passed across Phase 1 through Phase 6 with 81 percent app coverage
+  - Durable Web and CLI queue flows completed through an independent worker and existing manifest contract
+  - Phase 6 code review approved with zero remaining findings
   - 128 pytest tests passed across Phase 1 through Phase 5 with 81 percent app coverage
   - CadQuery job emitted six sources, backend report, hashes, and format results
   - Build123d separate environment emitted a valid 80 x 40 x 5 mm STEP

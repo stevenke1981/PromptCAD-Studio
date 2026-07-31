@@ -1,14 +1,13 @@
 evaluated_at: 2026-07-31
 autonomy: recommend_only
-selected: OS-sandboxed asynchronous renderer worker
+selected: Manufacturing drawing and approval workflow
 evidence:
-  - Phase 5 accepted the closed CadBackend contract, six deterministic sources, selection surfaces, provenance, and conformance suite.
-  - CadQuery, Build123d, and OpenSCAD are native-code runtimes currently guarded by application-level subprocess controls.
-  - Public deployment still lacks an OS sandbox, durable queue, per-job cancellation, and tenant quotas.
+  - Phase 6 accepted the durable queue, independent worker, cancellation, reload recovery, and hardened single-host container profile.
+  - Existing drawing PDF is an orthographic draft and explicitly lacks tolerances, datums, surface finish, BOM, and manufacturing sign-off.
+  - The original CAD Agent outcome requires outputs that can enter a controlled engineering review process, not only geometry generation.
 scope_candidate:
-  - Move all local CAD execution into an isolated worker service
-  - Add a durable job queue, cancellation, retry policy, and per-job resource budgets
-  - Disable outbound networking and run with a low-privilege identity and read-only root filesystem
-  - Apply cgroup and seccomp or platform-equivalent CPU, memory, process, and filesystem controls
-  - Preserve contract 1.0, manifests, hashes, fallback semantics, and Phase 1 through 5 flows
-reason_not_implemented: This changes deployment topology and requires an operations choice for queue, persistence, container runtime, and production isolation policy.
+  - Typed drawing metadata for dimensions, datums, tolerances, surface finish, and title block
+  - BOM and revision records for parts and future assemblies
+  - Draft, reviewed, approved, and rejected lifecycle with immutable approval provenance
+  - PDF generation and validation gates that distinguish a draft from approved manufacturing output
+reason_not_implemented: Approval identity, signature policy, tolerance standards, and legal responsibility are product and governance decisions that require the owner's explicit choices.

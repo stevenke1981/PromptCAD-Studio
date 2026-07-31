@@ -90,6 +90,28 @@ LLM 只負責產生受控 DSL，不直接執行任意 CAD 程式碼。每個後�
 - JSON body／generation／renderer 併發與輸出上限。
 - 獨立 Build123d venv 實際驗收有效 80×40×5 mm STEP 與兩個半徑 3.3 mm 圓柱孔面。
 
+## 第六階段：非同步與 OS-sandboxed Worker
+
+狀態：單機 durable queue 與 hardened Docker 垂直切片已完成。
+
+```text
+Web／REST／CLI enqueue
+  → SQLite WAL durable queue
+  → atomic claim + lease + heartbeat + bounded retry
+  → isolated promptcad-worker
+  → cooperative cancellation + renderer process-tree termination
+  → existing manifest／artifact contract
+```
+
+已完成：
+
+- prompt／edited spec 兩種背景工作，HTTP `202`、查詢、列表與取消端點。
+- `promptcad async-generate`／`async-render`／`queue-*` 與獨立 `promptcad-worker`。
+- Web 背景模式、可見 queue 狀態、取消按鈕及 reload 後續傳。
+- SQLite 原子 claim、worker lease／heartbeat、過期復原、有限重試與 queue 容量。
+- cooperative cancellation 會越過 planning／validation／materialization 邊界並終止 renderer 程序樹。
+- Docker Compose worker 與 hardened override：無外網、唯讀 root、capability drop、no-new-privileges、CPU／memory／PID 上限；API 在此 profile 強制 source-only。
+
 ## 下一個建議里程碑
 
-將 renderer 拆成非同步、無外網的 OS-sandboxed worker，加入 job cancellation、配額及 durable queue。公開部署前必須先完成低權限帳號、唯讀根目錄、cgroup/seccomp 或平台等效隔離。後續才考慮在實際 FreeCAD host 與已授權 Fusion 360／SOLIDWORKS workstation 上進行人工端到端驗收；目前不宣稱這些 host runtimes 已測試。
+補齊可製造工程圖：尺寸約束、基準、公差、表面處理、BOM 與簽核狀態；同時擴充 2D 工程圖的旋轉、陣列、多視圖與倒角／圓角推理。正式多租戶服務另需 PostgreSQL／外部 queue、租戶配額、retention、速率限制與平台核准的 seccomp／AppArmor policy。FreeCAD／Fusion 360／SOLIDWORKS host runtime 仍需各自授權環境的人工端到端驗收。

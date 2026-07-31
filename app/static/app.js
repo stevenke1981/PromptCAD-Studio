@@ -5,6 +5,9 @@ const backendEl = $('#backend');
 const backendNoteEl = $('#backend-note');
 const tokenEl = $('#token');
 const generateBtn = $('#generate');
+const asyncModeEl = $('#async-mode');
+const cancelJobBtn = $('#cancel-job');
+const resumeJobBtn = $('#resume-job');
 const statusEl = $('#status');
 const previewEl = $('#preview');
 const previewEmpty = $('#preview-empty');
@@ -18,6 +21,8 @@ const analyzeImageBtn = $('#analyze-image');
 const imageFileEl = $('#image-file');
 const knownLengthEl = $('#known-length');
 const imageThicknessEl = $('#image-thickness');
+const imagePageEl = $('#image-page');
+const perspectiveCorrectionEl = $('#perspective-correction');
 const featureTreePanel = $('#feature-tree-panel');
 const featureTreeEl = $('#feature-tree');
 const generateFeatureTreeBtn = $('#generate-feature-tree');
@@ -32,6 +37,9 @@ let activeImageAnalysis = null;
 let activeDxfAnalysis = null;
 let activeFeatureSource = null;
 let analysisRequestVersion = 0;
+let activeQueueJobId = null;
+let queuePollVersion = 0;
+const ACTIVE_QUEUE_KEY = 'promptcad-active-queue-job';
 
 function authHeaders(includeJson = true) {
   const out = {};
@@ -94,6 +102,98 @@ function setBadge(text, kind) {
   badge.className = `badge ${kind}`;
 }
 
+function setActiveQueue(queueJobId) {
+  activeQueueJobId = queueJobId;
+  cancelJobBtn.hidden = !queueJobId;
+  if (!queueJobId) resumeJobBtn.hidden = true;
+  generateBtn.disabled = Boolean(queueJobId);
+  regenerateBtn.disabled = Boolean(queueJobId);
+  if (queueJobId) {
+    localStorage.setItem(ACTIVE_QUEUE_KEY, queueJobId);
+  } else {
+    localStorage.removeItem(ACTIVE_QUEUE_KEY);
+  }
+}
+
+function showQueueConnectionError(error) {
+  if (error.status === 404) {
+    setActiveQueue(null);
+    resumeJobBtn.hidden = true;
+    setStatus('背景工作已不存在，已清除本機追蹤狀態。', true);
+    setBadge('NOT FOUND', 'fail');
+    return;
+  }
+  resumeJobBtn.hidden = false;
+  setStatus(`背景工作連線中斷：${error.message}。可重新連線或取消。`, true);
+  setBadge('OFFLINE', 'warn');
+}
+
+function queueStatusText(job) {
+  const labels = {
+    queued: '等待 Worker',
+    running: '背景產生中',
+    completed: '完成',
+    failed: '失敗',
+    cancelled: '已取消',
+  };
+  return `${labels[job.status] || job.status} · 嘗試 ${job.attempts} 次 · ${job.queue_job_id.slice(0, 8)}`;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function monitorQueue(queueJobId) {
+  const version = ++queuePollVersion;
+  setActiveQueue(queueJobId);
+  resumeJobBtn.hidden = true;
+  while (activeQueueJobId === queueJobId && version === queuePollVersion) {
+    const queued = await api(`/api/v1/async/jobs/${queueJobId}`);
+    if (version !== queuePollVersion) return;
+    setStatus(queueStatusText(queued), queued.status === 'failed');
+    setBadge(
+      queued.status.toUpperCase(),
+      queued.status === 'failed' || queued.status === 'cancelled'
+        ? 'fail'
+        : queued.status === 'completed'
+          ? 'ok'
+          : 'neutral',
+    );
+    if (queued.status === 'completed') {
+      const manifest = await api(queued.result_url);
+      if (version !== queuePollVersion) return;
+      showManifest(manifest);
+      setStatus(`完成：${manifest.renderer_used} / ${manifest.status}`);
+      setActiveQueue(null);
+      await loadJobs();
+      return;
+    }
+    if (queued.status === 'failed' || queued.status === 'cancelled') {
+      setStatus(
+        queued.error || (queued.status === 'cancelled' ? '背景工作已取消。' : '背景工作失敗。'),
+        queued.status === 'failed',
+      );
+      setActiveQueue(null);
+      return;
+    }
+    await wait(600);
+  }
+}
+
+async function enqueueAndMonitor(url, payload) {
+  const queued = await api(url, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  setStatus(`已加入背景佇列：${queued.queue_job_id.slice(0, 8)}`);
+  setBadge('QUEUED', 'neutral');
+  try {
+    await monitorQueue(queued.queue_job_id);
+  } catch (error) {
+    showQueueConnectionError(error);
+  }
+}
+
 function deactivateFeatureTree() {
   activeImageHash = null;
   activeImageAnalysis = null;
@@ -138,7 +238,10 @@ async function api(url, options = {}) {
     } catch (_) {
       // Non-JSON error bodies fall back to the HTTP status.
     }
-    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -343,15 +446,20 @@ generateBtn.addEventListener('click', async () => {
   setStatus('正在解析、驗證並建立 CAD…');
   setBadge('RUNNING', 'neutral');
   try {
+    const payload = {
+      prompt,
+      planner: plannerEl.value,
+      backend: backendEl.value,
+      formats: formats(),
+      render: true,
+    };
+    if (asyncModeEl.checked) {
+      await enqueueAndMonitor('/api/v1/async/generate', payload);
+      return;
+    }
     const data = await api('/api/v1/generate', {
       method: 'POST',
-      body: JSON.stringify({
-        prompt,
-        planner: plannerEl.value,
-        backend: backendEl.value,
-        formats: formats(),
-        render: true,
-      }),
+      body: JSON.stringify(payload),
     });
     showManifest(data);
     setStatus(`完成：${data.renderer_used} / ${data.status}`);
@@ -360,19 +468,49 @@ generateBtn.addEventListener('click', async () => {
     setStatus(error.message, true);
     setBadge('FAILED', 'fail');
   } finally {
-    generateBtn.disabled = false;
+    if (!activeQueueJobId) generateBtn.disabled = false;
   }
+});
+
+cancelJobBtn.addEventListener('click', async () => {
+  if (!activeQueueJobId) return;
+  cancelJobBtn.disabled = true;
+  try {
+    const queued = await api(
+      `/api/v1/async/jobs/${activeQueueJobId}/cancel`,
+      {method: 'POST'},
+    );
+    setStatus(
+      queued.status === 'cancelled'
+        ? '背景工作已取消。'
+        : '已要求取消；Worker 正在安全停止。',
+    );
+    if (queued.status === 'cancelled') {
+      setBadge('CANCELLED', 'fail');
+      setActiveQueue(null);
+    }
+  } catch (error) {
+    showQueueConnectionError(error);
+  } finally {
+    cancelJobBtn.disabled = false;
+  }
+});
+
+resumeJobBtn.addEventListener('click', () => {
+  if (!activeQueueJobId) return;
+  void monitorQueue(activeQueueJobId).catch(showQueueConnectionError);
 });
 
 analyzeImageBtn.addEventListener('click', async () => {
   const file = imageFileEl.files[0];
   const knownLength = Number(knownLengthEl.value);
   const thickness = Number(imageThicknessEl.value);
+  const pageNumber = Number(imagePageEl.value);
   if (!file) {
     setStatus('請先選擇 PNG 或 JPEG 圖片。', true);
     return;
   }
-  if (!(knownLength > 0) || !(thickness > 0)) {
+  if (!(knownLength > 0) || !(thickness > 0) || !Number.isInteger(pageNumber) || pageNumber < 1) {
     setStatus('校準長度與厚度必須大於 0。', true);
     return;
   }
@@ -383,6 +521,8 @@ analyzeImageBtn.addEventListener('click', async () => {
   body.append('image', file);
   body.append('known_length_mm', String(knownLength));
   body.append('thickness_mm', String(thickness));
+  body.append('page_index', String(pageNumber - 1));
+  body.append('perspective_correction', String(perspectiveCorrectionEl.checked));
   analyzeImageBtn.disabled = true;
   setStatus('正在安全解碼、校準並擷取輪廓與圓孔…');
   setBadge('ANALYZING', 'neutral');
@@ -517,14 +657,19 @@ regenerateBtn.addEventListener('click', async () => {
   setStatus('正在驗證修改後的 DSL 並重新建立 CAD…');
   setBadge('RUNNING', 'neutral');
   try {
+    const payload = {
+      spec,
+      formats: formats(),
+      render: true,
+      backend: backendEl.value,
+    };
+    if (asyncModeEl.checked) {
+      await enqueueAndMonitor('/api/v1/async/generate-from-spec', payload);
+      return;
+    }
     const data = await api('/api/v1/generate-from-spec', {
       method: 'POST',
-      body: JSON.stringify({
-        spec,
-        formats: formats(),
-        render: true,
-        backend: backendEl.value,
-      }),
+      body: JSON.stringify(payload),
     });
     showManifest(data);
     setStatus(`完成：${data.renderer_used} / ${data.status}`);
@@ -533,7 +678,7 @@ regenerateBtn.addEventListener('click', async () => {
     setStatus(error.message, true);
     setBadge('FAILED', 'fail');
   } finally {
-    regenerateBtn.disabled = false;
+    if (!activeQueueJobId) regenerateBtn.disabled = false;
   }
 });
 
@@ -583,9 +728,18 @@ backendEl.addEventListener('change', applyBackendCapability);
 tokenEl.addEventListener('change', () => {
   void loadCapabilities();
   void loadJobs();
+  const queueJobId = activeQueueJobId || localStorage.getItem(ACTIVE_QUEUE_KEY);
+  if (queueJobId) {
+    void monitorQueue(queueJobId).catch(showQueueConnectionError);
+  }
 });
 window.addEventListener('beforeunload', () => {
   if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl);
 });
 void loadJobs();
 void loadCapabilities();
+const savedQueueJobId = localStorage.getItem(ACTIVE_QUEUE_KEY);
+if (savedQueueJobId) {
+  asyncModeEl.checked = true;
+  void monitorQueue(savedQueueJobId).catch(showQueueConnectionError);
+}

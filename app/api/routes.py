@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import zipfile
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.security import require_api_token, safe_job_file, validate_job_id
@@ -21,16 +22,30 @@ from app.models.api import (
     JobManifest,
     PlanRequest,
     PlanResponse,
+    QueueJobResponse,
 )
 from app.models.cad import CadDocument, ValidationReport
 from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
+from app.services.async_queue import QueueFullError, QueueJobNotFound
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_token)])
 
 
 def _service(request: Request):
     return request.app.state.jobs
+
+
+def _queue(request: Request):
+    return request.app.state.async_queue
+
+
+def _queue_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, QueueJobNotFound):
+        return HTTPException(status_code=404, detail="Async job not found")
+    if isinstance(exc, QueueFullError):
+        return HTTPException(status_code=429, detail=str(exc))
+    return HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/health")
@@ -51,7 +66,7 @@ async def capabilities(request: Request):
         cadquery_available=service.renderer.cadquery_available(),
         openscad_available=service.renderer.openscad_available(),
         image_analysis_available=True,
-        image_formats=["png", "jpeg"],
+        image_formats=["png", "jpeg", "pdf"],
         dxf_analysis_available=True,
         dxf_entities=["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"],
         dxf_units=["auto", "mm", "inch", "cm"],
@@ -97,12 +112,82 @@ async def generate_from_spec(request: Request, body: GenerateFromSpecRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post(
+    "/async/generate",
+    response_model=QueueJobResponse,
+    status_code=202,
+)
+async def enqueue_generate(request: Request, body: GenerateRequest):
+    settings = request.app.state.settings
+    if len(body.prompt) > settings.max_prompt_chars:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Prompt exceeds {settings.max_prompt_chars} characters",
+        )
+    try:
+        return await asyncio.to_thread(
+            _queue(request).enqueue,
+            "prompt",
+            body.model_dump(mode="json"),
+        )
+    except (ValueError, QueueFullError) as exc:
+        raise _queue_error(exc) from exc
+
+
+@router.post(
+    "/async/generate-from-spec",
+    response_model=QueueJobResponse,
+    status_code=202,
+)
+async def enqueue_generate_from_spec(
+    request: Request,
+    body: GenerateFromSpecRequest,
+):
+    try:
+        return await asyncio.to_thread(
+            _queue(request).enqueue,
+            "spec",
+            body.model_dump(mode="json"),
+        )
+    except (ValueError, QueueFullError) as exc:
+        raise _queue_error(exc) from exc
+
+
+@router.get("/async/jobs", response_model=list[QueueJobResponse])
+async def list_async_jobs(
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+):
+    return await asyncio.to_thread(_queue(request).list, limit)
+
+
+@router.get("/async/jobs/{queue_job_id}", response_model=QueueJobResponse)
+async def get_async_job(request: Request, queue_job_id: str):
+    try:
+        return await asyncio.to_thread(_queue(request).get, queue_job_id)
+    except (ValueError, QueueJobNotFound) as exc:
+        raise _queue_error(exc) from exc
+
+
+@router.post(
+    "/async/jobs/{queue_job_id}/cancel",
+    response_model=QueueJobResponse,
+)
+async def cancel_async_job(request: Request, queue_job_id: str):
+    try:
+        return await asyncio.to_thread(_queue(request).cancel, queue_job_id)
+    except (ValueError, QueueJobNotFound) as exc:
+        raise _queue_error(exc) from exc
+
+
 @router.post("/image-analysis", response_model=ImageAnalysisResponse)
 async def image_analysis(
     request: Request,
     image: Annotated[UploadFile, File()],
     known_length_mm: Annotated[float, Form(gt=0, le=100_000)],
     thickness_mm: Annotated[float, Form(gt=0, le=100_000)],
+    perspective_correction: Annotated[bool, Form()] = False,
+    page_index: Annotated[int, Form(ge=0, le=99)] = 0,
 ):
     service = _service(request)
     try:
@@ -110,6 +195,8 @@ async def image_analysis(
             image,
             known_length_mm=known_length_mm,
             thickness_mm=thickness_mm,
+            perspective_correction=perspective_correction,
+            page_index=page_index,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

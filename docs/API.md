@@ -12,7 +12,7 @@
 ## `GET /health`
 
 ```json
-{"status": "ok", "version": "0.4.0"}
+{"status": "ok", "version": "0.5.0"}
 ```
 
 ## `GET /capabilities`
@@ -21,6 +21,7 @@
 
 - `backends[]`：固定 backend ID、compiler／contract version、execution kind、schema／feature／format 支援、runtime 狀態及 semantic fidelity。
 - `planner_capabilities[]`：planner ID、版本、可用狀態、輸入類型與描述。
+- `async_queue_available` 與 `async_job_kinds`：durable queue 是否可用及目前接受的 `prompt`／`spec` 工作。
 
 CLI 可取得同一份機器可讀資訊：
 
@@ -97,6 +98,39 @@ promptcad capabilities
 ```
 
 所有正式生成路徑都接受相同 `backend` 欄位：`/generate`、`/generate-from-spec`、`/generate-from-image-feature-tree` 與 `/generate-from-dxf-feature-tree`。
+
+## 非同步產生與取消
+
+`POST /async/generate` 接受與 `/generate` 相同的 body；`POST /async/generate-from-spec` 接受與 `/generate-from-spec` 相同的 body。成功加入 durable queue 時回傳 HTTP `202`：
+
+```json
+{
+  "queue_job_id": "32-character-lowercase-hex-id",
+  "kind": "prompt",
+  "status": "queued",
+  "created_at": "2026-07-31T12:00:00Z",
+  "updated_at": "2026-07-31T12:00:00Z",
+  "attempts": 0,
+  "cancellation_requested": false,
+  "result_job_id": null,
+  "result_url": null,
+  "error": null
+}
+```
+
+背景工作端點：
+
+- `GET /async/jobs?limit=50`：依建立時間倒序列出 queue jobs。
+- `GET /async/jobs/{queue_job_id}`：取得 queued／running／completed／failed／cancelled 狀態。
+- `POST /async/jobs/{queue_job_id}/cancel`：queued 工作立即取消；running 工作設定 cooperative cancellation，Worker 會終止 renderer 程序樹並保存 cancelled manifest。
+
+完成後 `result_job_id` 與 `result_url` 會指向既有 `/jobs/{job_id}` manifest，因此同步與非同步輸出契約相同。Queue 使用 SQLite WAL、原子 claim、lease／heartbeat、有限重試與服務重啟復原；至少啟動一個獨立 Worker：
+
+```bash
+promptcad-worker
+```
+
+如果沒有 Worker，工作會保持 `queued`，仍可安全取消。queue 滿載時 enqueue 回傳 `429`。
 
 ## `POST /image-analysis`
 
@@ -241,12 +275,13 @@ curl http://localhost:8000/api/v1/capabilities \
 
 - `401`：Token 缺少或錯誤。
 - `413`：圖片、DXF、Feature Tree 或一般 JSON generation request 超過對應的前置 body 上限。
+- `429`：durable queue 已達 pending／running 容量上限。
 - `404`：工作或檔案不存在，或識別碼／檔名不符合安全格式。
 - `422`：Prompt、DSL、圖片、校準、Feature Tree、格式或 LLM 規劃結果不符合 schema。
 - HTTP `200` 且 manifest `status=failed`：工作已被記錄，但驗證閘門阻止渲染；請查看 `validation.issues`。
 
 ## 資源上限
 
-一般 plan／generate／generate-from-spec／validate 預設限制 2 MB body、4 個併發請求；Feature Tree 預設 1 MB／4 併發。Renderer 預設 2 個併發工作、120 秒 timeout、單檔 200 MB、總輸出 500 MB、console 100,000 字元。這些限制可由 `PROMPTCAD_MAX_GENERATE_BODY_BYTES`、`PROMPTCAD_GENERATE_CONCURRENCY`、`PROMPTCAD_RENDER_CONCURRENCY` 及相關環境變數調整。
+一般 plan／generate／generate-from-spec／validate 以及兩個 async enqueue 端點預設限制 2 MB body、4 個併發請求；Feature Tree 預設 1 MB／4 併發。Renderer 預設 2 個併發工作、120 秒 timeout、單檔 200 MB、總輸出 500 MB、console 100,000 字元。Queue 預設最多 100 個 pending／running 工作、300 秒 lease、2 次嘗試與 0.5 秒 idle polling。這些限制可由 `PROMPTCAD_MAX_GENERATE_BODY_BYTES`、`PROMPTCAD_GENERATE_CONCURRENCY`、`PROMPTCAD_RENDER_CONCURRENCY`、`PROMPTCAD_ASYNC_QUEUE_*` 及相關環境變數調整。
 
-這些應用層限制不能取代 OS sandbox。公開部署必須把 CAD runner 放入隔離 worker，禁止外網、使用非 root／低權限帳號、唯讀根檔案系統及 cgroup/seccomp 或平台等效控制。
+`docker-compose.sandboxed.yml` 將同步 API renderer 設為 source-only，並在無外網、唯讀根檔案系統、移除 capabilities、`no-new-privileges` 與 cgroup 資源限制的獨立 worker 執行 CAD runner。正式部署仍需 TLS、租戶授權／配額、保留政策與平台核准的 seccomp／AppArmor 或等效控制。

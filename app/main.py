@@ -12,6 +12,7 @@ from app import __version__
 from app.api.routes import router
 from app.core.config import Settings, get_settings
 from app.core.request_limits import RequestBodyLimitMiddleware
+from app.services.async_queue import AsyncJobQueue
 from app.services.job_service import JobService
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.jobs = JobService(settings)
+    app.state.async_queue = AsyncJobQueue(settings)
     app.add_middleware(
         RequestBodyLimitMiddleware,
         path="/api/v1/image-analysis",
@@ -64,6 +66,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         "/api/v1/plan",
         "/api/v1/generate",
         "/api/v1/generate-from-spec",
+        "/api/v1/async/generate",
+        "/api/v1/async/generate-from-spec",
         "/api/v1/validate",
     ):
         app.add_middleware(

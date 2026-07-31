@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     max_image_bytes: int = Field(default=10_000_000, ge=100_000, le=50_000_000)
     max_image_pixels: int = Field(default=12_000_000, ge=100_000, le=40_000_000)
     max_image_dimension: int = Field(default=4096, ge=256, le=8192)
+    max_pdf_pages: int = Field(default=20, ge=1, le=100)
     image_analysis_timeout_seconds: int = Field(default=20, ge=2, le=120)
     image_analysis_concurrency: int = Field(default=2, ge=1, le=8)
     max_dxf_bytes: int = Field(default=5_000_000, ge=10_000, le=25_000_000)

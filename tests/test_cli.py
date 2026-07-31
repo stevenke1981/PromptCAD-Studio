@@ -4,6 +4,7 @@ import json
 from types import SimpleNamespace
 
 from app import cli
+from app.core.config import Settings
 
 
 class _Analysis:
@@ -178,3 +179,44 @@ def test_dxf_cli_reports_analysis_output_write_errors_without_traceback(
     assert result == 2
     assert error.startswith("無法寫入 DXF 分析結果：")
     assert "Traceback" not in error
+
+
+def test_async_cli_enqueue_status_list_and_cancel(tmp_path, monkeypatch, capsys) -> None:
+    settings = Settings(
+        env="test",
+        data_dir=tmp_path / "generated",
+        planner_mode="rule",
+        render_backend="source_only",
+    )
+    monkeypatch.setattr(cli, "get_settings", lambda: settings)
+    enqueue = cli.build_parser().parse_args(
+        [
+            "async-generate",
+            "畫一個長80mm、寬40mm、厚5mm的固定板",
+            "--planner",
+            "rule",
+            "--formats",
+            "json",
+            "py",
+            "--no-render",
+        ]
+    )
+    assert enqueue.func(enqueue) == 0
+    queued = json.loads(capsys.readouterr().out)
+    assert queued["status"] == "queued"
+
+    status = cli.build_parser().parse_args(
+        ["queue-status", queued["queue_job_id"]]
+    )
+    assert status.func(status) == 0
+    assert json.loads(capsys.readouterr().out)["queue_job_id"] == queued["queue_job_id"]
+
+    listing = cli.build_parser().parse_args(["queue-list", "--limit", "1"])
+    assert listing.func(listing) == 0
+    assert len(json.loads(capsys.readouterr().out)) == 1
+
+    cancel = cli.build_parser().parse_args(
+        ["queue-cancel", queued["queue_job_id"]]
+    )
+    assert cancel.func(cancel) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "cancelled"

@@ -1,0 +1,55 @@
+change_id: CHANGE-007
+status: passed_with_manual_deployment_gate
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 142 passed
+  coverage: 81 percent
+  lint: Ruff passed
+  compile: compileall passed
+  javascript: node check passed
+  yaml: base and sandboxed Compose plus agent YAML parsed successfully
+  api_and_worker:
+    status: PASS
+    flow: HTTP 202 enqueue -> atomic worker claim -> completed queue row -> existing JobManifest result_url
+    cancellation: queued and running cancellation covered
+    durability: reload recovery, worker lease recovery, and corrupt-payload isolation covered
+  cli_acceptance:
+    status: PASS
+    flow: async-generate -> promptcad-worker --once -> queue-status
+    enqueue_status: queued
+    worker_output: processed
+    final_status: completed
+    result_url_present: true
+  web_acceptance:
+    status: PASS
+    completed_flow: background prompt -> source-only manifest -> 12 download links
+    reload_recovery: PASS
+    queued_cancel: PASS
+    offline_then_cancel: PASS
+    missing_queue_id_cleanup: PASS
+    active_queue_id_after_terminal: null
+    console_errors_in_completed_flow: 0
+    screenshot: .agent/acceptance/CHANGE-007-web.png
+  sandbox_profile:
+    static_validation: PASS
+    docker_runtime: MANUAL_REQUIRED
+    controls:
+      - API renderer forced to source-only
+      - worker network_mode none
+      - read-only root filesystem
+      - all Linux capabilities dropped
+      - no-new-privileges
+      - CPU, memory, and PID limits
+  review:
+    verdict: APPROVE
+    critical: 0
+    high: 0
+    medium: 0
+    low: 0
+limitations:
+  - Docker executable was not installed on this Windows acceptance host
+  - Production TLS, tenant auth, quotas, retention, and platform policy remain deployment responsibilities

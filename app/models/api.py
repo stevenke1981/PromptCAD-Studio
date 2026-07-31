@@ -204,7 +204,7 @@ class CapabilityResponse(StrictApiModel):
     cadquery_available: bool
     openscad_available: bool
     image_analysis_available: bool = True
-    image_formats: list[str] = Field(default_factory=lambda: ["png", "jpeg"])
+    image_formats: list[str] = Field(default_factory=lambda: ["png", "jpeg", "pdf"])
     dxf_analysis_available: bool = True
     dxf_entities: list[str] = Field(
         default_factory=lambda: ["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"]

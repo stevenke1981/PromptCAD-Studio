@@ -27,12 +27,14 @@ class ImageCalibration(StrictModel):
 
 
 class DetectedOuterProfile(StrictModel):
-    shape: Literal["rectangle", "unsupported"]
+    shape: Literal["rectangle", "profile", "unsupported"]
     length_mm: float | None = Field(default=None, gt=0)
     width_mm: float | None = Field(default=None, gt=0)
+    points_mm: list[MetricPoint] = Field(default_factory=list, max_length=128)
     rotation_deg: float
     rectangularity: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)
+    perspective_corrected: bool = False
 
 
 class DetectedCircle(StrictModel):
@@ -46,6 +48,7 @@ class DetectedCircle(StrictModel):
 
 FeatureOperation = Literal[
     "sketch_rectangle",
+    "sketch_profile",
     "sketch_circle",
     "extrude",
     "cut_through",
@@ -57,14 +60,20 @@ class FeatureTreeNode(StrictModel):
     operation: FeatureOperation
     parent_id: str | None = Field(default=None, max_length=64)
     parameters: dict[str, float] = Field(default_factory=dict, max_length=12)
+    points: list[MetricPoint] = Field(default_factory=list, max_length=128)
     confidence: float = Field(ge=0, le=1)
 
 
 class ImageAnalysisResponse(StrictModel):
-    analysis_version: Literal["1.0"] = "1.0"
+    analysis_version: Literal["1.0", "1.1"] = "1.1"
     image_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     analysis_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
-    image_format: Literal["PNG", "JPEG"]
+    image_format: Literal["PNG", "JPEG", "PDF"]
+    source_kind: Literal["image", "pdf"] = "image"
+    source_page_index: int | None = Field(default=None, ge=0, le=99)
+    source_page_count: int | None = Field(default=None, ge=1, le=100)
+    source_image_width_px: int | None = Field(default=None, gt=0)
+    source_image_height_px: int | None = Field(default=None, gt=0)
     image_width_px: int = Field(gt=0)
     image_height_px: int = Field(gt=0)
     calibration: ImageCalibration

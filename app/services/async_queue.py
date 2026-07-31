@@ -23,6 +23,10 @@ class QueueJobNotFound(KeyError):
     pass
 
 
+class QueuePayloadError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class ClaimedQueueJob:
     queue_job_id: str
@@ -192,10 +196,10 @@ class AsyncJobQueue:
             payload = json.loads(claimed["payload_json"])
         except json.JSONDecodeError as exc:
             self.fail(claimed["id"], worker_id, "Queue payload is invalid JSON", retry=False)
-            raise RuntimeError("Queue payload is invalid JSON") from exc
+            raise QueuePayloadError("Queue payload is invalid JSON") from exc
         if not isinstance(payload, dict):
             self.fail(claimed["id"], worker_id, "Queue payload must be an object", retry=False)
-            raise RuntimeError("Queue payload must be an object")
+            raise QueuePayloadError("Queue payload must be an object")
         return ClaimedQueueJob(
             queue_job_id=claimed["id"],
             kind=claimed["kind"],
@@ -383,8 +387,16 @@ class AsyncJobQueue:
             updated = connection.execute(
                 """
                 UPDATE queue_jobs
-                SET status = ?, updated_at = ?, completed_at = ?,
-                    lease_expires_at = NULL, result_job_id = ?, error = ?
+                SET status = CASE
+                        WHEN cancel_requested = 1 THEN 'cancelled'
+                        ELSE ?
+                    END,
+                    updated_at = ?, completed_at = ?, lease_expires_at = NULL,
+                    result_job_id = ?,
+                    error = CASE
+                        WHEN cancel_requested = 1 THEN 'Cancelled by user request.'
+                        ELSE ?
+                    END
                 WHERE id = ? AND status = 'running' AND worker_id = ?
                 """,
                 (status, now, now, result_job_id, error, queue_job_id, worker_id),

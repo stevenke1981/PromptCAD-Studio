@@ -1,5 +1,20 @@
 # Release Notes
 
+## v0.5.0 — 2026-07-31
+
+第六階段 durable async queue 與隔離 Worker：
+
+- 新增 SQLite WAL queue，支援 prompt／edited spec、原子 claim、lease／heartbeat、過期復原、有限重試、容量限制及五種明確狀態。
+- 新增獨立 `promptcad-worker`；queue payload 在 Worker 再次經 Pydantic 驗證，損壞 payload 只會終止該工作，不會終止 Worker。
+- cooperative cancellation 貫穿 planning、validation、materialization 與 renderer loop；取消會終止完整程序樹，且 queue／manifest 不會出現 cancelled／completed 矛盾。
+- 新增 HTTP `202` async generate／generate-from-spec、queue list／status／cancel REST 端點；同步 API 保持相容。
+- 新增 `promptcad async-generate`、`async-render`、`queue-list`、`queue-status`、`queue-cancel` 與 `promptcad-worker --once`。
+- Web 新增背景模式、狀態輪詢、取消、reload recovery、離線重連與失效 queue ID 自動清理；完成流程顯示 12 個下載入口且無 Console 錯誤。
+- Docker Compose 新增 Worker service；hardened override 強制 API source-only，Worker 無外網、唯讀 root、移除 capabilities、no-new-privileges 及 CPU／memory／PID 限制。
+- 修正 lease 被其他 Worker 接手時舊 Worker 二次 fail 導致程序退出、取消與 manifest 競態、async prompt 上限不一致，以及 SQLite 操作阻塞 ASGI event loop。
+- 142 項測試與 81% app 覆蓋率通過；Ruff、compileall、JavaScript 語法與 YAML 靜態驗證通過；最終 code review 零剩餘 findings。
+- 本機未安裝 Docker executable，因此 hardened Compose runtime 啟動標記 `MANUAL_REQUIRED`；正式部署仍需 TLS、租戶授權／配額、retention 與平台核准的 seccomp／AppArmor。
+
 ## v0.4.0 — 2026-07-31
 
 第五階段可擴充規劃器與多 CAD 後端：

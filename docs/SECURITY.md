@@ -60,6 +60,9 @@
 - 原始 DXF、上傳檔名與未列入 manifest 的檔案不進入 artifact 或 ZIP；DXF provenance 以 HMAC 綁定來源雜湊、單位、解析器版本、實體統計與原始幾何。
 - Feature Tree 使用 operation 與參數白名單、有限值和父子關係驗證，再經既有 `DesignValidator` 才能渲染。
 - Docker Compose 預設只綁定 `127.0.0.1`；公開部署必須另行設定認證、TLS、速率限制及 OS sandbox。
+- Durable queue 使用固定 SQLite schema、參數化查詢、32 位 hex ID、原子 claim、lease／heartbeat、有限重試與 pending 容量；payload 進入 Worker 後再次以 Pydantic 驗證。
+- Running cancellation 是 cooperative boundary；Renderer 會終止 Windows Job Object／POSIX process group，而 queued cancellation 不會啟動工作。
+- Hardened Compose profile 強制 API source-only，將 CAD runner 移入無外網 worker；API／worker 使用唯讀 root、capability drop、`no-new-privileges` 與 CPU／memory／PID 限制。
 
 ## 部署要求
 
@@ -68,17 +71,17 @@
 - TLS 與反向代理。
 - 強制 API Token 或真正的使用者認證。
 - 每 IP／使用者速率限制、工作數與輸出大小配額。
-- Renderer 獨立 worker／容器、無外網、非 root、唯讀根目錄、cgroup 與 seccomp 或平台等效 OS sandbox。應用層 timeout、環境 allowlist 與 staging 檢查不能取代此要求。
+- 使用 hardened worker profile，並由部署平台核准、鎖定 seccomp／AppArmor 或等效政策；高風險環境應提升為每工作獨立 sandbox。
 - 工作目錄生命週期與自動刪除政策。
 - 依租戶隔離資料與下載授權。
 - 依賴與容器漏洞掃描、鎖版及 SBOM。
 
 ## 尚未完成
 
-- OS 級 sandbox、seccomp 與每工作 cgroup 配額。
+- 每工作獨立 sandbox、客製 seccomp／AppArmor policy 與租戶級 cgroup 配額；目前為服務級 hardened container。
 - 多租戶帳號、細粒度授權、審計資料庫與速率限制。
 - CAD kernel 惡意／退化 BREP fuzzing。
-- 工作佇列與 renderer worker 網路隔離。
+- 多節點外部 queue、租戶公平排程、dead-letter queue 與 retention／garbage collection。
 - 正式工程圖、公差與製造簽核流程。
 - FreeCAD host runtime 尚未實際執行；Fusion 360／SOLIDWORKS host adapters 也尚未在授權桌面環境做端到端驗收。
 

@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.models.cad import CadDocument
 from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
+from app.services.async_queue import AsyncJobQueue, QueueFullError, QueueJobNotFound
 from app.services.job_service import JobService
 
 BACKEND_CHOICES = [
@@ -78,6 +79,8 @@ def _image(args) -> int:
             data,
             known_length_mm=args.known_length,
             thickness_mm=args.thickness,
+            perspective_correction=args.perspective_correction,
+            page_index=args.page,
         )
     )
     if args.analysis_output:
@@ -285,6 +288,77 @@ def _capabilities(_args) -> int:
         service.close()
 
 
+def _async_generate(args) -> int:
+    try:
+        settings = get_settings()
+        if len(args.prompt) > settings.max_prompt_chars:
+            raise ValueError(
+                f"Prompt exceeds {settings.max_prompt_chars} characters"
+            )
+        queued = AsyncJobQueue(settings).enqueue(
+            "prompt",
+            {
+                "prompt": args.prompt,
+                "planner": args.planner,
+                "formats": args.formats,
+                "render": not args.no_render,
+                "backend": args.backend,
+            },
+        )
+    except (ValueError, QueueFullError) as exc:
+        print(f"無法加入背景佇列：{exc}", file=sys.stderr)
+        return 2
+    _print_json(queued.model_dump(mode="json"))
+    return 0
+
+
+def _async_render(args) -> int:
+    try:
+        spec = CadDocument.model_validate_json(
+            Path(args.spec).read_text(encoding="utf-8")
+        )
+        queued = AsyncJobQueue(get_settings()).enqueue(
+            "spec",
+            {
+                "spec": spec.model_dump(mode="json"),
+                "formats": args.formats,
+                "render": not args.no_render,
+                "backend": args.backend,
+            },
+        )
+    except (OSError, ValueError, QueueFullError) as exc:
+        print(f"無法加入背景佇列：{exc}", file=sys.stderr)
+        return 2
+    _print_json(queued.model_dump(mode="json"))
+    return 0
+
+
+def _queue_status(args) -> int:
+    try:
+        queued = AsyncJobQueue(get_settings()).get(args.queue_job_id)
+    except (ValueError, QueueJobNotFound) as exc:
+        print(f"找不到背景工作：{exc}", file=sys.stderr)
+        return 2
+    _print_json(queued.model_dump(mode="json"))
+    return 0 if queued.status not in {"failed", "cancelled"} else 1
+
+
+def _queue_list(args) -> int:
+    queued = AsyncJobQueue(get_settings()).list(args.limit)
+    _print_json([item.model_dump(mode="json") for item in queued])
+    return 0
+
+
+def _queue_cancel(args) -> int:
+    try:
+        queued = AsyncJobQueue(get_settings()).cancel(args.queue_job_id)
+    except (ValueError, QueueJobNotFound) as exc:
+        print(f"無法取消背景工作：{exc}", file=sys.stderr)
+        return 2
+    _print_json(queued.model_dump(mode="json"))
+    return 0
+
+
 def _add_backend_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--backend",
@@ -311,6 +385,26 @@ def build_parser() -> argparse.ArgumentParser:
     _add_backend_argument(generate)
     generate.set_defaults(func=_generate)
 
+    async_generate = sub.add_parser(
+        "async-generate",
+        help="Queue CAD generation from a prompt for promptcad-worker",
+    )
+    async_generate.add_argument("prompt")
+    async_generate.add_argument(
+        "--planner",
+        choices=["auto", "agent", "rule", "llm"],
+        default="auto",
+    )
+    async_generate.add_argument(
+        "--formats",
+        nargs="+",
+        default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+        choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+    )
+    async_generate.add_argument("--no-render", action="store_true")
+    _add_backend_argument(async_generate)
+    async_generate.set_defaults(func=_async_generate)
+
     validate = sub.add_parser("validate", help="Validate a spec.json")
     validate.add_argument("spec")
     validate.set_defaults(func=_validate)
@@ -327,6 +421,21 @@ def build_parser() -> argparse.ArgumentParser:
     _add_backend_argument(render)
     render.set_defaults(func=_render)
 
+    async_render = sub.add_parser(
+        "async-render",
+        help="Queue an edited spec.json for promptcad-worker",
+    )
+    async_render.add_argument("spec")
+    async_render.add_argument(
+        "--formats",
+        nargs="+",
+        default=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+        choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
+    )
+    async_render.add_argument("--no-render", action="store_true")
+    _add_backend_argument(async_render)
+    async_render.set_defaults(func=_async_render)
+
     image = sub.add_parser(
         "image",
         help="Extract a calibrated top-view image into an editable feature tree",
@@ -339,6 +448,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Known real length of the detected outer profile's longest edge in mm",
     )
     image.add_argument("--thickness", type=float, required=True, help="Part thickness in mm")
+    image.add_argument(
+        "--page",
+        type=int,
+        default=0,
+        help="Zero-based PDF page index; ignored for PNG/JPEG unless nonzero",
+    )
+    image.add_argument(
+        "--perspective-correction",
+        action="store_true",
+        help="Rectify one convex four-corner plate before extracting geometry",
+    )
     image.add_argument(
         "--formats",
         nargs="+",
@@ -398,6 +518,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print machine-readable planner and CAD backend capabilities",
     )
     capabilities.set_defaults(func=_capabilities)
+
+    queue_status = sub.add_parser("queue-status", help="Show one async queue job")
+    queue_status.add_argument("queue_job_id")
+    queue_status.set_defaults(func=_queue_status)
+
+    queue_list = sub.add_parser("queue-list", help="List async queue jobs")
+    queue_list.add_argument("--limit", type=int, choices=range(1, 501), default=50)
+    queue_list.set_defaults(func=_queue_list)
+
+    queue_cancel = sub.add_parser("queue-cancel", help="Cancel an async queue job")
+    queue_cancel.add_argument("queue_job_id")
+    queue_cancel.set_defaults(func=_queue_cancel)
     return parser
 
 

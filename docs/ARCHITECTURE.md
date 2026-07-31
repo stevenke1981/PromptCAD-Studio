@@ -106,6 +106,14 @@ Renderer 只執行 server-owned compiler 從受控 DSL 生成的固定程式，�
 
 CadQuery 2.8.0 與 Build123d 0.11.1 依賴互相衝突的 OCP distributions，必須安裝於不同 venv。Build123d 已在獨立環境實際輸出並回讀 80×40×5 mm STEP 與兩個半徑 3.3 mm 圓柱孔面；FreeCAD host runtime 尚未執行驗收。
 
+## Durable queue 與 Worker
+
+同步 `/generate` 契約保持相容；需要斷線續傳或取消時，REST／CLI／Web 將同一份 `GenerateRequest` 或 `GenerateFromSpecRequest` 放入 SQLite WAL queue。Queue 位於 `data_dir/.queue/promptcad.sqlite3`，不屬於任何可下載 job artifact。
+
+Worker 以 `BEGIN IMMEDIATE` 原子 claim 最舊的 queued 工作，記錄 worker ID、attempt 與 lease。獨立 heartbeat 延長 lease；程序崩潰後，下一次 claim 會把未超過重試限制的過期工作重新排隊。Queued cancellation 立即成為 terminal；running cancellation 透過 callback 傳入 planner／validator／renderer，renderer 會終止整個程序樹。完成後 queue 只保存 result job ID，正式輸出仍由原有 manifest、hash 與下載契約管理。
+
+`docker-compose.sandboxed.yml` 將 API renderer 設為 source-only，讓 native CAD kernel 只在 `network_mode: none` 的 worker 執行。API 與 worker 都使用唯讀 root、無新增權限、移除 capabilities 及 CPU／memory／PID 限制；唯一持久可寫範圍是共享 `generated/` volume。
+
 ## 驗證閘門
 
 驗證分為 schema 與設計兩層：
@@ -151,8 +159,7 @@ manifest.json
 
 ## 生產化建議
 
-- 將 renderer 拆成無對外網路的獨立 worker 與工作佇列。
-- 每個工作使用容器、非 root 使用者、唯讀根檔案系統、seccomp、CPU／記憶體／檔案大小／時間限制。這是公開部署的必要條件，不是選配強化。
+- 以 hardened Compose profile 作為單機基線；平台仍需核准並鎖定 seccomp／AppArmor，必要時升級成每工作獨立容器。
 - 使用 PostgreSQL 與物件儲存取代單機目錄，並加入租戶與配額。
 - 對 prompt、schema、compiler、kernel 與輸出保存版本 provenance。
 - 增加 BREP 有效性、最小壁厚、干涉、可加工性、公差堆疊與材料規則。

@@ -54,6 +54,7 @@ class JobService:
             max_bytes=settings.max_image_bytes,
             max_pixels=settings.max_image_pixels,
             max_dimension=settings.max_image_dimension,
+            max_pdf_pages=settings.max_pdf_pages,
         )
         self.dxf_extractor = DxfFeatureExtractor(
             max_bytes=settings.max_dxf_bytes,
@@ -133,6 +134,8 @@ class JobService:
         *,
         known_length_mm: float,
         thickness_mm: float,
+        perspective_correction: bool = False,
+        page_index: int = 0,
     ):
         if len(data) > self.settings.max_image_bytes:
             raise ValueError(f"Image exceeds the {self.settings.max_image_bytes} byte limit")
@@ -141,6 +144,8 @@ class JobService:
             data,
             known_length_mm=known_length_mm,
             thickness_mm=thickness_mm,
+            perspective_correction=perspective_correction,
+            page_index=page_index,
         )
 
     async def analyze_upload(
@@ -149,6 +154,8 @@ class JobService:
         *,
         known_length_mm: float,
         thickness_mm: float,
+        perspective_correction: bool = False,
+        page_index: int = 0,
     ) -> ImageAnalysisResponse:
         await self._image_slots.acquire()
         try:
@@ -164,6 +171,8 @@ class JobService:
             data,
             known_length_mm=known_length_mm,
             thickness_mm=thickness_mm,
+            perspective_correction=perspective_correction,
+            page_index=page_index,
         )
 
     async def _analyze_admitted(
@@ -172,6 +181,8 @@ class JobService:
         *,
         known_length_mm: float,
         thickness_mm: float,
+        perspective_correction: bool,
+        page_index: int,
     ) -> ImageAnalysisResponse:
         loop = asyncio.get_running_loop()
         try:
@@ -182,6 +193,8 @@ class JobService:
                     data,
                     known_length_mm=known_length_mm,
                     thickness_mm=thickness_mm,
+                    perspective_correction=perspective_correction,
+                    page_index=page_index,
                 ),
             )
         except BaseException:
@@ -734,6 +747,24 @@ class JobService:
     def get(self, job_id: str) -> JobManifest | None:
         value = self.storage.read_manifest(job_id)
         return JobManifest.model_validate(value) if value else None
+
+    def mark_cancelled(self, manifest: JobManifest) -> JobManifest:
+        if manifest.status == "cancelled":
+            return manifest
+        warning = "Cancelled by user request."
+        updated = manifest.model_copy(
+            update={
+                "status": "cancelled",
+                "error": warning,
+                "warnings": [*manifest.warnings, warning],
+                "completed_at": datetime.now(UTC),
+            }
+        )
+        self.storage.write_json(
+            self.storage.path(updated.job_id) / "manifest.json",
+            updated.model_dump(mode="json"),
+        )
+        return updated
 
     def list(self) -> list[JobListItem]:
         items = []

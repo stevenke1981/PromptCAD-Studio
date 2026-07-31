@@ -16,7 +16,7 @@ DXF
   → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
 ```
 
-目前版本 v0.4.0 是可直接執行的 MVP，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
+目前版本 v0.5.0 是可直接執行的 CAD Agent 平台，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
 
 ## 已包含
 
@@ -38,6 +38,9 @@ DXF
 - `CadBackend` 能力合約 1.0：公開 schema、特徵、輸出格式、執行類型、runtime 狀態與語意 fidelity。
 - 六個確定性來源編譯器／adapter：CadQuery、Build123d、FreeCAD Python、OpenSCAD、Fusion 360 與 SOLIDWORKS。
 - API、CLI 與 Web 都可選擇後端；每個工作記錄 fallback chain、逐格式結果、spec SHA-256、artifact SHA-256 與 `backend-report.json`。
+- SQLite durable queue、獨立 `promptcad-worker`、原子 claim、lease／heartbeat、有限重試、取消與服務重啟後續傳。
+- REST、CLI 與 Web 背景模式；網頁會保存進行中的 queue ID，重新開啟後繼續輪詢並取得最終 manifest。
+- Docker Compose worker 與 hardened override：worker 無外網、唯讀根檔案系統、移除 Linux capabilities、`no-new-privileges` 及 CPU／記憶體／程序數限制。
 - `auto` 只會執行 CadQuery → OpenSCAD → source-only；Build123d 必須明確選擇，FreeCAD／Fusion 360／SOLIDWORKS 永不由伺服器自動執行。選擇 Fusion 360／SOLIDWORKS 且 `render=true` 時，工作包會以可用的 exact 本機核心附帶已驗證的中性 STEP。
 - Web UI、REST API、CLI、Docker Compose、Conda 環境、測試、CI 與完整範例。
 - 每次工作保存 manifest、DSL、驗證報告、六種後端來源、能力報告、預覽及實際輸出。
@@ -70,6 +73,14 @@ docker compose down
 ```
 
 生成檔保存在專案的 `generated/`，重新建立容器不會消失。
+
+公開或半公開測試環境建議使用隔離 worker 設定；API 容器只產生來源，實際 CAD kernel 只在無外網 worker 執行：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.sandboxed.yml up --build
+```
+
+此設定仍需要部署端提供 TLS、認證、租戶配額、保留政策與平台核准的 seccomp／AppArmor 設定。
 
 ## 不使用 Docker
 
@@ -204,6 +215,17 @@ promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf --thickness 6
 promptcad doctor
 ```
 
+背景工作不會佔住 CLI；API 與 CLI 共用 `generated/.queue/promptcad.sqlite3`：
+
+```bash
+promptcad async-generate "畫一個可固定 NEMA17 馬達的支架" --planner agent
+promptcad queue-list --limit 10
+promptcad queue-status QUEUE_JOB_ID
+promptcad queue-cancel QUEUE_JOB_ID
+promptcad-worker                     # 持續處理
+promptcad-worker --once              # 最多處理一筆後離開
+```
+
 只輸出 DSL 與原始碼：
 
 ```bash
@@ -234,6 +256,17 @@ curl -X POST http://localhost:8000/api/v1/generate \
 curl -X POST http://localhost:8000/api/v1/generate-from-spec \
   -H "Content-Type: application/json" \
   --data-binary @request-with-spec.json
+```
+
+背景產生回傳 HTTP `202` 與 queue ID；之後輪詢狀態或取消，完成時依 `result_url` 取得原本的 manifest：
+
+```bash
+curl -X POST http://localhost:8000/api/v1/async/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"長80寬40厚5的板","planner":"rule","backend":"auto","formats":["step","json"],"render":true}'
+
+curl http://localhost:8000/api/v1/async/jobs/QUEUE_JOB_ID
+curl -X POST http://localhost:8000/api/v1/async/jobs/QUEUE_JOB_ID/cancel
 ```
 
 完整端點與狀態語意見 [`docs/API.md`](docs/API.md)。
@@ -328,7 +361,7 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 7. DXF 垂直切片僅支援 modelspace 中一個閉合 2D 外框與 Z 軸圓孔的拉伸；側向孔、PDF、多視圖、旋轉、陣列、倒角與圓角推理仍屬後續工作。過大而無法在安全取樣上限內維持 0.5 mm 弦長精度的圓弧會停止轉換。
 8. FreeCAD 來源已通過語法、確定性與 conformance 測試，但本機尚未在 FreeCAD host runtime 實際執行；不得把 source export 解讀為 host runtime 驗收。
 9. Fusion 360／SOLIDWORKS 沒有伺服器端執行能力，也沒有授權桌面主程式的端到端驗收；adapter 只處理同工作包的中性 STEP。
-10. 目前 subprocess 的 allowlist、timeout、併發與輸出限制不是 OS sandbox。任何公開部署都必須把 renderer 放入無外網、非 root、唯讀根檔案系統、具 cgroup/seccomp 或等效 OS 隔離的獨立 worker。
+10. `docker-compose.sandboxed.yml` 提供可執行的單機 OS 隔離基線，但不是完整多租戶平台；正式公開部署仍需 TLS、帳號授權、租戶配額、保留政策、集中式 queue／database，以及平台核准的 seccomp／AppArmor 或等效政策。本機沒有 Docker executable，因此此 Compose profile 仍需在 Docker 主機做最終啟動驗收。
 
 ## 測試與品質檢查
 
@@ -340,7 +373,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前 128 項測試與 81% app 覆蓋率涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP，以及關閉式 registry、能力合約、六後端來源 conformance、prompt injection 資料化、執行期 fallback provenance、程序樹 timeout、缺檔 fail-closed 與 host adapter 中性 STEP 前置條件。
+目前 142 項測試與 81% app 覆蓋率涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP、六後端 conformance，以及 queue 原子 claim、lease 復原、損壞 payload、取消競態、程序樹終止、REST／CLI／Worker 背景流程。
 
 Build123d 已在獨立環境實際驗收：有效的 80×40×5 mm STEP，包含兩個半徑 3.3 mm 的圓柱孔面。CadQuery 與 Build123d 的 OCP 相依衝突，因此此結果來自分離的 venv。
 
