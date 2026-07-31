@@ -1,0 +1,57 @@
+change_id: CHANGE-006
+status: passed
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  tests: 128 passed
+  coverage: 81 percent
+  lint: Ruff passed
+  compile: compileall passed
+  javascript: node check passed
+  runtime_acceptance:
+    cadquery:
+      status: PASS
+      step_solids: 1
+      size_mm: [80, 40, 5]
+      cylindrical_faces: 2
+    build123d_separate_venv:
+      status: PASS
+      step_solids: 1
+      size_mm: [80, 40, 5]
+      cylindrical_face_radii_mm: [3.3, 3.3]
+    cross_backend_volume_delta_mm3: 0
+  web_acceptance:
+    status: PASS
+    flow: select Fusion 360 adapter -> generate validated neutral STEP -> package adapter
+    visible_status: "完成：cadquery / completed"
+    adapter_target: fusion360
+    backend_effective: cadquery
+    fallback_chain: [fusion360, cadquery]
+    step_checkbox_enabled: true
+    model_step_present: true
+    adapter_source_present: true
+    download_links: 14
+    console_errors: 0
+    screenshot: .agent/acceptance/CHANGE-006-web.png
+  safety:
+    - backend registry is a closed server-owned allowlist
+    - request values cannot provide modules, executables, arguments, paths, or environment
+    - exact backends fail instead of skipping requested fillets or chamfers
+    - missing, empty, oversized, escaped, or invalid renderer artifacts fail closed
+    - stdout and stderr are bounded while the renderer is running
+    - timeout terminates the renderer process tree
+    - artifact signatures and SHA-256 values are checked without loading full files
+    - runtime fallback is recorded after execution in manifest and backend-report.json
+    - desktop CAD adapters are never executed by the server
+  provenance:
+    contract_version: "1.0"
+    sources:
+      - cadquery
+      - build123d
+      - freecad
+      - openscad
+      - fusion360
+      - solidworks

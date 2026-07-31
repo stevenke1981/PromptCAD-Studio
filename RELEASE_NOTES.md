@@ -1,5 +1,23 @@
 # Release Notes
 
+## v0.4.0 — 2026-07-31
+
+第五階段可擴充規劃器與多 CAD 後端：
+
+- 建立關閉式 `CadBackend` registry 與能力合約 1.0；請求只能選擇固定 ID，不能注入 module、executable、arguments、environment 或 plugin metadata。
+- Web、REST API、CLI 支援 `backend`／`--backend`；新增 `promptcad capabilities` 與 planner capability reporting。
+- 六種確定性來源編譯器／adapter：CadQuery、Build123d、FreeCAD Python、OpenSCAD、Fusion 360、SOLIDWORKS。
+- 所有來源由 schema 驗證後的 DSL 產生；prompt injection 維持為 JSON 資料，design validation error 會阻止所有 CAD runner。
+- 保留 CadQuery／OpenSCAD local runners；`auto` fallback 是 CadQuery → OpenSCAD → source-only。
+- Build123d 0.11.1 為 opt-in local runner，只輸出 STEP／STL；CadQuery 與 Build123d 因 OCP distributions 衝突，必須使用不同 venv。
+- FreeCAD 僅輸出 Python source，尚未在 host runtime 實際執行。Fusion 360／SOLIDWORKS host adapter 永不由伺服器執行；render 開啟時工作包會以可用的 exact 本機核心附帶已驗證 sibling STEP。
+- 每個工作新增 `backend-report.json`、spec hash、source／artifact SHA-256、capability snapshot、backend diagnostics、fallback chain 與逐格式結果。
+- Generation JSON body、Feature Tree、圖片、DXF 與 renderer 新增或保留解析前 body、併發、timeout、console、單檔與總輸出上限。
+- 128 項測試與 81% app 覆蓋率通過，包括 registry 安全、跨後端 conformance、來源確定性、adapter 中性 STEP 前置條件、執行期 provenance、程序樹終止、缺檔 fail-closed 及 Phase 1–4 回歸。
+- Renderer 以有界 stdout／stderr、程序樹 timeout、嚴格 STL／STEP／DXF／SVG 檢查及串流 SHA-256 保護輸出；exact 後端不再靜默略過 fillet／chamfer。
+- Build123d 獨立環境實際驗收：有效 80×40×5 mm STEP 與兩個半徑 3.3 mm 圓柱孔面。
+- 公開部署明確要求獨立、無外網、低權限、唯讀根目錄且有 cgroup/seccomp 或平台等效 OS sandbox 的 renderer worker。
+
 ## v0.3.0 — 2026-07-31
 
 第四階段受限 DXF 工程圖轉 3D：

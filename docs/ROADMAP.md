@@ -65,20 +65,31 @@
 
 ## 第五階段：可擴充規劃器與多 CAD 後端
 
-長期架構：
+狀態：能力合約與多後端來源垂直切片已完成。
 
 ```text
 Prompt／Image／DXF
   → Planner
   → CAD DSL／Feature Tree
   → Validator
-  → CAD Compiler
-  → CadQuery／Build123d／FreeCAD／OpenSCAD
-  → Fusion 360／SolidWorks Adapter
+  → closed CadBackend registry / contract 1.0
+  → CadQuery／Build123d／FreeCAD Python／OpenSCAD source
+  → Fusion 360／SOLIDWORKS host adapter
 ```
 
 LLM 只負責產生受控 DSL，不直接執行任意 CAD 程式碼。每個後端必須共用幾何驗證、單位、特徵語意與可追溯輸出。
 
+已完成：
+
+- 固定 backend ID allowlist、能力合約 1.0 與跨後端 conformance suite。
+- API、CLI、Web 後端選擇，以及 `promptcad capabilities`／planner capabilities。
+- 六個確定性來源編譯器／adapter；所有來源只承接 schema 驗證後的 DSL。
+- CadQuery／OpenSCAD 既有 local runner；Build123d 是 opt-in local runner。
+- FreeCAD source-only；Fusion 360／SOLIDWORKS host adapters 永不在伺服器執行。
+- `backend-report.json`、spec／artifact SHA-256、逐格式結果、diagnostics 與 fallback chain。
+- JSON body／generation／renderer 併發與輸出上限。
+- 獨立 Build123d venv 實際驗收有效 80×40×5 mm STEP 與兩個半徑 3.3 mm 圓柱孔面。
+
 ## 下一個建議里程碑
 
-第五階段先建立正式 `CadBackend` 能力合約、後端 registry、provenance 與跨後端 conformance suite，再加入 Build123d 與 FreeCAD 開源後端；Fusion 360／SolidWorks 以外部 adapter 隔離授權與執行環境。
+將 renderer 拆成非同步、無外網的 OS-sandboxed worker，加入 job cancellation、配額及 durable queue。公開部署前必須先完成低權限帳號、唯讀根目錄、cgroup/seccomp 或平台等效隔離。後續才考慮在實際 FreeCAD host 與已授權 Fusion 360／SOLIDWORKS workstation 上進行人工端到端驗收；目前不宣稱這些 host runtimes 已測試。

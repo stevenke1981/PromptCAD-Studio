@@ -24,9 +24,34 @@ class Settings(BaseSettings):
     data_dir: Path = Path("generated")
 
     planner_mode: Literal["auto", "agent", "rule", "llm"] = "auto"
-    render_backend: Literal["auto", "cadquery", "openscad", "source_only"] = "auto"
+    render_backend: Literal[
+        "auto",
+        "cadquery",
+        "build123d",
+        "freecad",
+        "openscad",
+        "fusion360",
+        "solidworks",
+        "source_only",
+    ] = "auto"
     allow_source_fallback: bool = True
     render_timeout_seconds: int = Field(default=120, ge=5, le=1800)
+    render_concurrency: int = Field(default=2, ge=1, le=8)
+    max_render_artifact_bytes: int = Field(
+        default=200_000_000,
+        ge=1_000_000,
+        le=1_000_000_000,
+    )
+    max_render_total_bytes: int = Field(
+        default=500_000_000,
+        ge=1_000_000,
+        le=2_000_000_000,
+    )
+    max_renderer_output_chars: int = Field(
+        default=100_000,
+        ge=1_000,
+        le=1_000_000,
+    )
     max_prompt_chars: int = Field(default=4000, ge=100, le=20000)
     max_jobs_returned: int = Field(default=50, ge=1, le=500)
     max_image_bytes: int = Field(default=10_000_000, ge=100_000, le=50_000_000)
@@ -42,6 +67,8 @@ class Settings(BaseSettings):
     dxf_analysis_concurrency: int = Field(default=2, ge=1, le=8)
     max_feature_tree_body_bytes: int = Field(default=1_000_000, ge=10_000, le=5_000_000)
     feature_tree_concurrency: int = Field(default=4, ge=1, le=16)
+    max_generate_body_bytes: int = Field(default=2_000_000, ge=10_000, le=10_000_000)
+    generate_concurrency: int = Field(default=4, ge=1, le=16)
 
     api_token: str | None = None
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000"

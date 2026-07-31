@@ -57,6 +57,8 @@ async def capabilities(request: Request):
         dxf_units=["auto", "mm", "inch", "cm"],
         configured_planner_mode=settings.planner_mode,
         configured_render_backend=settings.render_backend,
+        backends=service.backends.capabilities(),
+        planner_capabilities=service.planners.capabilities(),
     )
 
 
@@ -71,7 +73,13 @@ async def plan(request: Request, body: PlanRequest):
 @router.post("/generate", response_model=JobManifest)
 async def generate(request: Request, body: GenerateRequest):
     try:
-        return await _service(request).generate(body.prompt, body.planner, body.formats, body.render)
+        return await _service(request).generate(
+            body.prompt,
+            body.planner,
+            body.formats,
+            body.render,
+            body.backend,
+        )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -83,6 +91,7 @@ async def generate_from_spec(request: Request, body: GenerateFromSpecRequest):
             body.spec,
             body.formats,
             body.render,
+            body.backend,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -133,6 +142,7 @@ async def generate_from_image_feature_tree(
             body.feature_tree,
             formats=body.formats,
             render=body.render,
+            backend=body.backend,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -182,6 +192,7 @@ async def generate_from_dxf_feature_tree(
             body.feature_tree,
             formats=body.formats,
             render=body.render,
+            backend=body.backend,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

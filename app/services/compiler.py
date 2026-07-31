@@ -48,25 +48,15 @@ class CadQueryCompiler:
             lines.extend(self._hole_lines(index, hole, max_x, max_y, max_z))
         for index, cutout in enumerate(doc.cutouts):
             lines.extend(self._cutout_lines(doc, index, cutout, max_x, max_y))
-        for index, fillet in enumerate(doc.fillets):
+        for fillet in doc.fillets:
             selector = self._selector(fillet.selector)
-            lines.extend(
-                [
-                    "    try:",
-                    f"        result = result.edges({selector!r}).fillet({_f(fillet.radius)})",
-                    "    except Exception as exc:",
-                    f"        warnings.append('fillet {index + 1} skipped: ' + str(exc))",
-                ]
+            lines.append(
+                f"    result = result.edges({selector!r}).fillet({_f(fillet.radius)})"
             )
-        for index, chamfer in enumerate(doc.chamfers):
+        for chamfer in doc.chamfers:
             selector = self._selector(chamfer.selector)
-            lines.extend(
-                [
-                    "    try:",
-                    f"        result = result.edges({selector!r}).chamfer({_f(chamfer.distance)})",
-                    "    except Exception as exc:",
-                    f"        warnings.append('chamfer {index + 1} skipped: ' + str(exc))",
-                ]
+            lines.append(
+                f"    result = result.edges({selector!r}).chamfer({_f(chamfer.distance)})"
             )
         lines.extend(
             [

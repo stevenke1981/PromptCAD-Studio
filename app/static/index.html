@@ -30,10 +30,23 @@
             <option value="llm">LLM</option>
           </select>
         </label>
+        <label>CAD 後端
+          <select id="backend">
+            <option value="auto">自動（建議）</option>
+            <option value="cadquery">CadQuery</option>
+            <option value="build123d">Build123d 來源</option>
+            <option value="freecad">FreeCAD Python 來源</option>
+            <option value="openscad">OpenSCAD</option>
+            <option value="fusion360">Fusion 360 Adapter</option>
+            <option value="solidworks">SOLIDWORKS Adapter</option>
+            <option value="source_only">只輸出來源</option>
+          </select>
+        </label>
         <label class="token">API Token（選填）
           <input id="token" type="password" autocomplete="off" placeholder="伺服器有啟用時才需要" />
         </label>
       </div>
+      <p id="backend-note" class="status">自動選擇可用且相容的本機 CAD 核心。</p>
 
       <fieldset>
         <legend>輸出</legend>
@@ -43,7 +56,7 @@
           <label><input type="checkbox" value="dxf" checked /> DXF</label>
           <label><input type="checkbox" value="svg" checked /> SVG</label>
           <label><input type="checkbox" value="pdf" checked /> 工程圖 PDF</label>
-          <label><input type="checkbox" value="py" checked /> CadQuery</label>
+          <label><input type="checkbox" value="py" checked /> CAD Python adapters</label>
           <label><input type="checkbox" value="scad" checked /> OpenSCAD</label>
           <label><input type="checkbox" value="json" checked /> JSON</label>
         </div>

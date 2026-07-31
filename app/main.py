@@ -60,6 +60,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             max_body_bytes=settings.max_feature_tree_body_bytes,
             max_concurrency=settings.feature_tree_concurrency,
         )
+    for generation_path in (
+        "/api/v1/plan",
+        "/api/v1/generate",
+        "/api/v1/generate-from-spec",
+        "/api/v1/validate",
+    ):
+        app.add_middleware(
+            RequestBodyLimitMiddleware,
+            path=generation_path,
+            max_body_bytes=settings.max_generate_body_bytes,
+            max_concurrency=settings.generate_concurrency,
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

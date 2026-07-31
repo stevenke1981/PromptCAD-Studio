@@ -11,11 +11,12 @@ DXF
   → 隔離解析／線與三點圓弧輪廓／圓孔／對稱判斷／可編輯 Feature Tree
   → 受控 CadDocument 1.0／1.1 DSL
   → 幾何與製造前驗證
-  → CadQuery／OpenSCAD 編譯器
+  → 關閉式 CadBackend registry／能力合約 1.0
+  → CadQuery／Build123d／FreeCAD Python／OpenSCAD／Fusion 360／SOLIDWORKS 原始碼
   → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
 ```
 
-目前版本是可直接執行的 MVP，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由確定性編譯器建立幾何。
+目前版本 v0.4.0 是可直接執行的 MVP，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
 
 ## 已包含
 
@@ -33,12 +34,17 @@ DXF
 - 螺紋尺寸輔助：常見 M2～M12 一般間隙孔與攻牙底孔表；其他尺寸使用明確標示的比例近似。
 - 驗證閘門：孔超出輪廓、孔重疊、側面開口越界、盲孔／沉孔深度、沉頭深度、圓環內孔、邊距、壁厚、圓角與倒角。
 - 無效設計會保存 DSL 與原始碼供修正，但**不會送入 CAD 核心渲染**。
+- 關閉式多後端 registry：請求只能選擇固定短 ID，不能提供 Python 模組、執行檔、命令列、環境變數或外掛 metadata。
+- `CadBackend` 能力合約 1.0：公開 schema、特徵、輸出格式、執行類型、runtime 狀態與語意 fidelity。
+- 六個確定性來源編譯器／adapter：CadQuery、Build123d、FreeCAD Python、OpenSCAD、Fusion 360 與 SOLIDWORKS。
+- API、CLI 與 Web 都可選擇後端；每個工作記錄 fallback chain、逐格式結果、spec SHA-256、artifact SHA-256 與 `backend-report.json`。
+- `auto` 只會執行 CadQuery → OpenSCAD → source-only；Build123d 必須明確選擇，FreeCAD／Fusion 360／SOLIDWORKS 永不由伺服器自動執行。選擇 Fusion 360／SOLIDWORKS 且 `render=true` 時，工作包會以可用的 exact 本機核心附帶已驗證的中性 STEP。
 - Web UI、REST API、CLI、Docker Compose、Conda 環境、測試、CI 與完整範例。
-- 每次工作保存 manifest、DSL、驗證報告、CadQuery、OpenSCAD、預覽及實際輸出。
+- 每次工作保存 manifest、DSL、驗證報告、六種後端來源、能力報告、預覽及實際輸出。
 
 ## 最快啟動：Docker
 
-Docker 環境內含 CadQuery 2.8.0，可實際產生 STEP、STL、DXF 與 SVG。
+Docker 環境內含 CadQuery 2.8.0，可實際產生 STEP、STL、DXF 與 SVG。Docker image 不安裝 Build123d；選擇 `build123d` 時會安全降級為來源輸出。
 
 ```bash
 docker compose up --build
@@ -89,6 +95,19 @@ conda activate promptcad
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+### 選用 Build123d runtime
+
+CadQuery 2.8.0 與 Build123d 0.11.1 依賴不同、互相衝突的 OCP distributions，**不可把 `[cad]` 與 `[build123d]` extras 安裝在同一個虛擬環境**。請為 Build123d 建立獨立環境：
+
+```powershell
+python -m venv .venv-build123d
+.venv-build123d\Scripts\Activate.ps1
+python -m pip install -e ".[build123d]"
+promptcad generate "長80寬40厚5的板，中間兩個M6通孔" --backend build123d
+```
+
+CadQuery 請繼續使用 Docker、Conda，或另一個只安裝 `.[cad]` 的 venv。Build123d 是 opt-in，不會加入 `auto` fallback chain。
+
 ### 僅開發 DSL、API 與原始碼
 
 ```bash
@@ -100,7 +119,7 @@ pytest
 uvicorn app.main:app --reload
 ```
 
-未安裝 CadQuery／OpenSCAD 時，系統進入 `source_only`：仍會產生 `spec.json`、`validation.json`、`model.py`、`model.scad`、`preview.svg` 與 `drawing.pdf`，但不會偽造 STEP／STL／DXF。
+未安裝相容 CAD runtime 時，系統進入 `source_only`：仍會產生 `spec.json`、`validation.json`、六種後端來源、`backend-report.json`、`preview.svg` 與 `drawing.pdf`，但不會偽造 STEP／STL／DXF。
 
 ## 使用方式
 
@@ -171,10 +190,14 @@ promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf `
 ### CLI
 
 ```bash
+promptcad capabilities
 promptcad generate "畫一個長120、寬60、厚10的固定板，四角M6孔，R5" --planner rule
+promptcad generate "長80寬40厚5的板，中間兩個M6通孔" --backend cadquery
+promptcad generate "長80寬40厚5的板，中間兩個M6通孔" --backend build123d
+promptcad generate "長80寬40厚5的板" --backend freecad --no-render
 promptcad generate "畫一個可固定 NEMA17 馬達的支架" --planner agent
 promptcad validate examples/generated/plate-four-holes/spec.json
-promptcad render examples/generated/plate-four-holes/spec.json
+promptcad render examples/generated/plate-four-holes/spec.json --backend cadquery
 promptcad render examples/generated/enclosure-side-cutout/spec.json
 promptcad image examples/image-to-cad/plate-top-view.png --known-length 100 --thickness 5
 promptcad dxf examples/dxf-to-cad/plate-two-holes-mm.dxf --thickness 6
@@ -197,10 +220,13 @@ curl -X POST http://localhost:8000/api/v1/generate \
   -d '{
     "prompt": "鋁合金固定座，長120mm、寬60mm、厚10mm，四角 M6 通孔，R5",
     "planner": "rule",
+    "backend": "cadquery",
     "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     "render": true
   }'
 ```
+
+`backend` 可為 `auto`、`cadquery`、`build123d`、`freecad`、`openscad`、`fusion360`、`solidworks` 或 `source_only`。Fusion 360 與 SOLIDWORKS adapter 必須在已授權桌面 CAD 主程式內執行；PromptCAD 伺服器不執行它們，但在 `render=true` 時會以 CadQuery 或 Build123d 封裝其所需的已驗證 `model.step`。
 
 修改後的 DSL 重新輸出：
 
@@ -277,14 +303,19 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 | `dxf-analysis.json` | DXF 單位、來源雜湊、實體統計、對稱性與已驗證 provenance |
 | `dxf-feature-tree.json` | 人工確認後、實際用於 DXF 轉 3D 的 Feature Tree |
 | `model.py` | 可獨立執行的 CadQuery 模型 |
+| `model.build123d.py` | Build123d 模型；只在明確選擇且獨立 runtime 可用時由伺服器執行 |
+| `model.freecad.py` | FreeCAD Python 來源；伺服器不執行 |
 | `model.scad` | OpenSCAD fallback 模型 |
+| `model.fusion360.py` | Fusion 360 host adapter；匯入同工作包的 `model.step` |
+| `model.solidworks.py` | SOLIDWORKS host adapter；匯入同工作包的 `model.step` |
+| `backend-report.json` | 合約版本、能力快照、來源 SHA-256、spec hash、診斷與 fallback chain |
 | `preview.svg` | 不依賴 CAD 核心的快速工程預覽 |
 | `drawing.pdf` | A4 橫式三視圖工程草圖，不依賴 CAD 核心 |
 | `model.step` | 實體 CAD 交換檔，需要 CadQuery |
 | `model.stl` | 3D 列印網格，需要 CadQuery 或 OpenSCAD |
 | `model.dxf` | 水平截面 2D DXF，需要 CadQuery |
 | `model.svg` | CadQuery 投影 SVG |
-| `manifest.json` | 工作狀態、產物與 renderer provenance |
+| `manifest.json` | 工作狀態、後端選擇、逐格式結果、artifact SHA-256 與 renderer provenance |
 
 ## 重要限制
 
@@ -295,6 +326,9 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
 6. 圖片 MVP 僅支援校準後的高對比正俯視矩形板與圓孔；厚度必須輸入。透視、反光、遮擋、任意輪廓與多零件照片會停止自動轉換。
 7. DXF 垂直切片僅支援 modelspace 中一個閉合 2D 外框與 Z 軸圓孔的拉伸；側向孔、PDF、多視圖、旋轉、陣列、倒角與圓角推理仍屬後續工作。過大而無法在安全取樣上限內維持 0.5 mm 弦長精度的圓弧會停止轉換。
+8. FreeCAD 來源已通過語法、確定性與 conformance 測試，但本機尚未在 FreeCAD host runtime 實際執行；不得把 source export 解讀為 host runtime 驗收。
+9. Fusion 360／SOLIDWORKS 沒有伺服器端執行能力，也沒有授權桌面主程式的端到端驗收；adapter 只處理同工作包的中性 STEP。
+10. 目前 subprocess 的 allowlist、timeout、併發與輸出限制不是 OS sandbox。任何公開部署都必須把 renderer 放入無外網、非 root、唯讀根檔案系統、具 cgroup/seccomp 或等效 OS 隔離的獨立 worker。
 
 ## 測試與品質檢查
 
@@ -306,7 +340,9 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP。
+目前 128 項測試與 81% app 覆蓋率涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片安全解碼與校準、DXF 格式／單位／2D／複雜度防線、線與三點圓弧編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP，以及關閉式 registry、能力合約、六後端來源 conformance、prompt injection 資料化、執行期 fallback provenance、程序樹 timeout、缺檔 fail-closed 與 host adapter 中性 STEP 前置條件。
+
+Build123d 已在獨立環境實際驗收：有效的 80×40×5 mm STEP，包含兩個半徑 3.3 mm 的圓柱孔面。CadQuery 與 Build123d 的 OCP 相依衝突，因此此結果來自分離的 venv。
 
 ## 專案結構
 
@@ -316,14 +352,16 @@ app/
   core/                設定、Token 與路徑安全
   models/              CadDocument DSL 與 API 模型
   services/
+    backends.py         關閉式能力 registry 與後端選擇
+    build123d_compiler.py / freecad_compiler.py / external_adapters.py
     planners/          本地規則與 OpenAI-compatible LLM
     image_analysis.py  校準影像、特徵擷取與 Feature Tree 轉換
     dxf_analysis.py    受限 DXF 解析、正規化與 Feature Tree 轉換
-  workers/             一次性 DXF 分析程序
     compiler.py        CadQuery 確定性編譯器
     openscad.py        OpenSCAD 編譯器
     renderer.py        CAD 核心選擇與受限 subprocess
     validator.py       幾何／製造前驗證閘門
+  workers/             一次性 DXF 分析程序
   static/              無前端建置步驟的 Web UI
 docs/                  API、架構、DSL、提示詞與安全說明
 examples/generated/    可直接修改及重新輸出的完整範例

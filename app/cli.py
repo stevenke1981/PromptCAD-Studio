@@ -12,11 +12,28 @@ from app.models.dxf import DxfAnalysisResponse
 from app.models.image import ImageAnalysisResponse
 from app.services.job_service import JobService
 
+BACKEND_CHOICES = [
+    "auto",
+    "cadquery",
+    "build123d",
+    "freecad",
+    "openscad",
+    "fusion360",
+    "solidworks",
+    "source_only",
+]
+
 
 def _generate(args) -> int:
     service = JobService(get_settings())
     manifest = asyncio.run(
-        service.generate(args.prompt, args.planner, args.formats, not args.no_render)
+        service.generate(
+            args.prompt,
+            args.planner,
+            args.formats,
+            not args.no_render,
+            args.backend,
+        )
     )
     print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
     return 0 if manifest.status != "failed" else 1
@@ -33,7 +50,14 @@ def _validate(args) -> int:
 def _render(args) -> int:
     service = JobService(get_settings())
     spec = CadDocument.model_validate_json(Path(args.spec).read_text(encoding="utf-8"))
-    manifest = asyncio.run(service.generate_from_spec(spec, args.formats, not args.no_render))
+    manifest = asyncio.run(
+        service.generate_from_spec(
+            spec,
+            args.formats,
+            not args.no_render,
+            args.backend,
+        )
+    )
     print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
     return 0 if manifest.status != "failed" else 1
 
@@ -82,6 +106,7 @@ def _image(args) -> int:
             feature_tree,
             formats=args.formats,
             render=not args.no_render,
+            backend=args.backend,
         )
     )
     print(json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2))
@@ -191,6 +216,7 @@ def _dxf(args) -> int:
                 feature_tree,
                 formats=args.formats,
                 render=not args.no_render,
+                backend=args.backend,
             )
         )
     except ValueError as exc:
@@ -207,21 +233,65 @@ def _doctor(_args) -> int:
     import importlib.util
     import shutil
 
+    from app.services.backends import default_backend_registry
+
     settings = get_settings()
     cadquery = importlib.util.find_spec("cadquery") is not None
     openscad = shutil.which("openscad")
+    capabilities = {
+        item.backend_id: item
+        for item in default_backend_registry().capabilities()
+    }
+    cadquery = cadquery and capabilities["cadquery"].runtime_available
     print("PromptCAD Studio doctor")
     print(f"Python: {sys.version.split()[0]}")
     print(f"Data dir: {settings.data_dir.resolve()}")
     print(f"Planner mode: {settings.planner_mode}")
     print(f"LLM configured: {settings.llm_is_configured}")
     print(f"CadQuery: {'available' if cadquery else 'not installed'}")
+    print(
+        "Build123d: "
+        + (
+            "available"
+            if capabilities["build123d"].runtime_available
+            else "not installed / isolated extra"
+        )
+    )
     print(f"OpenSCAD: {openscad or 'not installed'}")
     if not cadquery and not openscad:
         print("Result: source-only mode. Use Docker/conda for STEP/STL/DXF.")
         return 1
     print("Result: CAD renderer available.")
     return 0
+
+
+def _capabilities(_args) -> int:
+    service = JobService(get_settings())
+    try:
+        value = {
+            "contract_version": "1.0",
+            "backends": [
+                item.model_dump(mode="json")
+                for item in service.backends.capabilities()
+            ],
+            "planners": [
+                item.model_dump(mode="json")
+                for item in service.planners.capabilities()
+            ],
+        }
+        _print_json(value)
+        return 0
+    finally:
+        service.close()
+
+
+def _add_backend_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--backend",
+        choices=BACKEND_CHOICES,
+        default="auto",
+        help="CAD backend；桌面 CAD adapter 僅輸出受控來源腳本",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -238,6 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     )
     generate.add_argument("--no-render", action="store_true")
+    _add_backend_argument(generate)
     generate.set_defaults(func=_generate)
 
     validate = sub.add_parser("validate", help="Validate a spec.json")
@@ -253,6 +324,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     )
     render.add_argument("--no-render", action="store_true")
+    _add_backend_argument(render)
     render.set_defaults(func=_render)
 
     image = sub.add_parser(
@@ -287,6 +359,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use an edited analysis JSON previously written by --analysis-output",
     )
     image.add_argument("--no-render", action="store_true")
+    _add_backend_argument(image)
     image.set_defaults(func=_image)
 
     dxf = sub.add_parser("dxf", help="分析 DXF 並以可編輯特徵樹產生 CAD")
@@ -314,10 +387,17 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
     )
     dxf.add_argument("--no-render", action="store_true")
+    _add_backend_argument(dxf)
     dxf.set_defaults(func=_dxf)
 
     doctor = sub.add_parser("doctor", help="Check local CAD runtime")
     doctor.set_defaults(func=_doctor)
+
+    capabilities = sub.add_parser(
+        "capabilities",
+        help="Print machine-readable planner and CAD backend capabilities",
+    )
+    capabilities.set_defaults(func=_capabilities)
     return parser
 
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "promptcad-studio"
-version = "0.3.0"
-description = "Prompt-to-parametric-CAD studio with a validated CAD DSL and CadQuery/OpenSCAD backends"
+version = "0.4.0"
+description = "Prompt-to-parametric-CAD studio with a validated CAD DSL and multi-backend source compilers"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = { text = "MIT" }
@@ -32,6 +32,7 @@ dependencies = [
 
 [project.optional-dependencies]
 cad = ["cadquery==2.8.0"]
+build123d = ["build123d==0.11.1"]
 dev = [
   "pytest>=9,<10",
   "pytest-cov>=7,<8",

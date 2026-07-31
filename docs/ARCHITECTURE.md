@@ -24,10 +24,12 @@ CadDocument 1.0 / 1.1
 (Pydantic, extra=forbid, units=mm, bounded lists/numbers)
           ↓
 DesignValidator
-  ├─ valid ───→ EngineeringDrawingPdf + CadQueryCompiler + OpenScadCompiler → Renderer
+  ├─ valid ───→ EngineeringDrawingPdf + closed CadBackend registry
+  │               ├─ six deterministic source compilers / adapters
+  │               └─ selected local runner: CadQuery / Build123d / OpenSCAD
   └─ invalid ─→ 保存 DSL／原始碼／預覽，但 validation-blocked
           ↓
-Job manifest + downloadable artifacts
+backend-report.json + Job manifest + downloadable artifacts
 ```
 
 ## 為何加入 DSL
@@ -66,16 +68,43 @@ DXF 也不進入 prompt planner。父程序先限制 multipart bytes 與併發�
 - `axis=y`：孔在 XZ 平面定位；正面入口位於 +Y 面。
 - 盲孔、沉孔與沉頭孔由正向外表面向零件內部切除。
 
-## Renderer 選擇
+## CadBackend 能力合約 1.0
+
+`BackendRegistry` 是建立於 server startup 的固定、唯讀 allowlist。外部請求只能選擇 `auto`、`source_only` 或已註冊的短 ID；不能提供 import path、class name、executable、arguments、environment 或 plugin metadata。
+
+每個 backend 宣告：
+
+- compiler 與 contract version。
+- `local_process`、`host_application` 或 `none` 執行類型。
+- CadDocument schema、base、feature 與 export format 支援。
+- server render formats、runtime availability 與 semantic fidelity。
+- 固定來源檔名。
+
+| Backend | 來源檔 | Server execution | 輸出／語意 |
+|---|---|---|---|
+| CadQuery | `model.py` | 本機受限 subprocess | STEP／STL／DXF／SVG；exact |
+| Build123d | `model.build123d.py` | 明確 opt-in 且 runtime 可用時 | STEP／STL；exact |
+| FreeCAD Python | `model.freecad.py` | 不執行 | STEP／STL source contract；exact |
+| OpenSCAD | `model.scad` | 本機受限 subprocess | STL；approximated |
+| Fusion 360 | `model.fusion360.py` | 不執行，需授權 host app | 匯入 sibling STEP 再輸出 F3D |
+| SOLIDWORKS | `model.solidworks.py` | 不執行，需授權 host app | 匯入 sibling STEP 再輸出 SLDPRT |
+
+六種來源都從 schema 驗證過的 `CadDocument` 確定性產生；prompt 只會成為 JSON 字串資料。DesignValidator 出現 error 時不會啟動任何 CAD runner。Fusion 360／SOLIDWORKS adapter 只讀取同工作包的 `model.step`，不讀環境變數、不啟動 subprocess，也不匯入 PromptCAD 內部模組。
+
+## Renderer 選擇與 fallback
 
 `PROMPTCAD_RENDER_BACKEND`：
 
 - `auto`：CadQuery → OpenSCAD → source-only。
-- `cadquery`：優先 CadQuery；失敗時依 `ALLOW_SOURCE_FALLBACK` 決定是否降級。
-- `openscad`：可輸出 STL，但不支援 STEP／DXF，且 fallback 不套用 fillet/chamfer。
+- `cadquery`：只選 CadQuery；runtime 缺少時依 `ALLOW_SOURCE_FALLBACK` 降為 source-only。
+- `build123d`：只在明確選擇且選用 runtime 可用時執行，不加入 `auto` chain。
+- `openscad`：可輸出 STL，但不支援 STEP／DXF／SVG；fillet／chamfer 會在執行前 fail closed。
+- `freecad`：只輸出來源。`fusion360`、`solidworks` host adapter 永不在伺服器執行；render 工作會用可用的 CadQuery／Build123d exact runtime 建立已驗證 sibling STEP。
 - `source_only`：只產生可重現來源與預覽。
 
-Renderer 只執行系統編譯器生成的固定程式，使用 `shell=false`、固定命令列、封閉工作目錄及 timeout。
+Renderer 只執行 server-owned compiler 從受控 DSL 生成的固定程式，使用 `shell=false`、固定命令列、私有 staging／HOME／TEMP、環境 allowlist、執行期間有界 stdout／stderr、程序樹 timeout、併發槽與 artifact 大小／格式簽章檢查。所有要求且宣告支援的輸出都必須存在、非空並通過驗證，才會從 staging 原子提升到 job；實際 fallback provenance 在執行後寫入 manifest 與 backend report。
+
+CadQuery 2.8.0 與 Build123d 0.11.1 依賴互相衝突的 OCP distributions，必須安裝於不同 venv。Build123d 已在獨立環境實際輸出並回讀 80×40×5 mm STEP 與兩個半徑 3.3 mm 圓柱孔面；FreeCAD host runtime 尚未執行驗收。
 
 ## 驗證閘門
 
@@ -94,7 +123,12 @@ Renderer 只執行系統編譯器生成的固定程式，使用 `shell=false`、
 spec.json
 validation.json
 model.py
+model.build123d.py
+model.freecad.py
 model.scad
+model.fusion360.py
+model.solidworks.py
+backend-report.json
 preview.svg
 drawing.pdf（不依賴 CAD kernel 的三視圖工程草圖）
 model.step / model.stl / model.dxf / model.svg（依環境與請求）
@@ -102,7 +136,9 @@ render-warnings.json（CadQuery 執行時）
 manifest.json
 ```
 
-manifest 記錄 planner、renderer、請求格式、狀態、警告及產物，不把 API Key 寫入檔案。
+`backend-report.json` 記錄 contract、能力快照、spec／source hash、後端選擇、fallback chain 與 diagnostics。manifest 記錄 planner、renderer、逐格式結果、artifact SHA-256、狀態、警告及產物，不把 API Key 寫入檔案。
+
+`GET /capabilities` 與 `promptcad capabilities` 同時公開 backend 與 planner capability；API、CLI 與 Web 共用相同 backend ID 集合。
 
 ## 擴充新特徵
 
@@ -116,7 +152,7 @@ manifest 記錄 planner、renderer、請求格式、狀態、警告及產物，�
 ## 生產化建議
 
 - 將 renderer 拆成無對外網路的獨立 worker 與工作佇列。
-- 每個工作使用容器、非 root 使用者、唯讀根檔案系統、seccomp、CPU／記憶體／檔案大小／時間限制。
+- 每個工作使用容器、非 root 使用者、唯讀根檔案系統、seccomp、CPU／記憶體／檔案大小／時間限制。這是公開部署的必要條件，不是選配強化。
 - 使用 PostgreSQL 與物件儲存取代單機目錄，並加入租戶與配額。
 - 對 prompt、schema、compiler、kernel 與輸出保存版本 provenance。
 - 增加 BREP 有效性、最小壁厚、干涉、可加工性、公差堆疊與材料規則。

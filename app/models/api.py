@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,6 +11,16 @@ from app.models.image import FeatureTreeNode, ImageAnalysisResponse
 
 OutputFormat = Literal["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"]
 PlannerChoice = Literal["auto", "agent", "rule", "llm"]
+BackendChoice = Literal[
+    "auto",
+    "cadquery",
+    "build123d",
+    "freecad",
+    "openscad",
+    "fusion360",
+    "solidworks",
+    "source_only",
+]
 
 
 def default_formats() -> list[OutputFormat]:
@@ -32,6 +43,7 @@ class GenerateRequest(PlanRequest):
         max_length=8,
     )
     render: bool = True
+    backend: BackendChoice = "auto"
 
 
 class GenerateFromSpecRequest(StrictApiModel):
@@ -42,6 +54,7 @@ class GenerateFromSpecRequest(StrictApiModel):
         max_length=8,
     )
     render: bool = True
+    backend: BackendChoice = "auto"
 
 
 class FeatureTreeToSpecRequest(StrictApiModel):
@@ -58,6 +71,7 @@ class GenerateFromImageFeatureTreeRequest(StrictApiModel):
         max_length=8,
     )
     render: bool = True
+    backend: BackendChoice = "auto"
 
 
 class DxfFeatureTreeToSpecRequest(StrictApiModel):
@@ -72,6 +86,7 @@ class GenerateFromDxfFeatureTreeRequest(DxfFeatureTreeToSpecRequest):
         max_length=8,
     )
     render: bool = True
+    backend: BackendChoice = "auto"
 
 
 class PlanResponse(StrictApiModel):
@@ -85,6 +100,48 @@ class Artifact(StrictApiModel):
     media_type: str
     size: int
     url: str
+    sha256: str = ""
+
+
+class BackendDiagnostic(StrictApiModel):
+    backend_id: str
+    severity: Literal["info", "warning", "error"]
+    code: str
+    message: str
+
+
+class BackendCapability(StrictApiModel):
+    backend_id: str
+    display_name: str
+    compiler_version: str
+    contract_version: str
+    execution_kind: Literal["local_process", "host_application", "none"]
+    source_export_available: bool
+    local_execution_supported: bool
+    runtime_available: bool
+    schema_versions: list[str]
+    base_features: list[str]
+    feature_types: list[str]
+    export_formats: list[str]
+    server_render_formats: list[str]
+    source_filenames: list[str]
+    semantic_fidelity: Literal["exact", "approximated", "neutral_step_bridge"]
+    unavailable_reason: str | None = None
+
+
+class PlannerCapability(StrictApiModel):
+    planner_id: str
+    version: str
+    available: bool
+    input_kind: Literal["prompt", "standard_prompt"]
+    description: str
+
+
+class FormatResult(StrictApiModel):
+    format: OutputFormat
+    status: Literal["produced", "unavailable", "failed", "source_only"]
+    filename: str | None = None
+    reason: str | None = None
 
 
 class JobManifest(StrictApiModel):
@@ -100,6 +157,16 @@ class JobManifest(StrictApiModel):
     artifacts: list[Artifact] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None
+    backend_requested: BackendChoice = "auto"
+    backend_used: str = "legacy"
+    backend_contract_version: str = "1.0"
+    source_backends: list[str] = Field(default_factory=list)
+    backend_diagnostics: list[BackendDiagnostic] = Field(default_factory=list)
+    format_results: list[FormatResult] = Field(default_factory=list)
+    fallback_chain: list[str] = Field(default_factory=list)
+    spec_sha256: str = ""
+    validation_version: str = "1"
+    completed_at: datetime | None = None
 
 
 class JobListItem(StrictApiModel):
@@ -128,3 +195,5 @@ class CapabilityResponse(StrictApiModel):
     dxf_units: list[str] = Field(default_factory=lambda: ["auto", "mm", "inch", "cm"])
     configured_planner_mode: str
     configured_render_backend: str
+    backends: list[BackendCapability] = Field(default_factory=list)
+    planner_capabilities: list[PlannerCapability] = Field(default_factory=list)

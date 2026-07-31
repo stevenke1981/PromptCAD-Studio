@@ -1,4 +1,4 @@
-# Project Status — v0.3.0
+# Project Status — v0.4.0
 
 ## 可用功能
 
@@ -13,13 +13,18 @@
 - 開放式外殼 ±X／±Y 矩形側面切口。
 - X／Y／Z 軸孔、fillet、chamfer。
 - CadQuery STEP／STL／DXF／SVG 與 OpenSCAD STL fallback。
+- 關閉式 `CadBackend` registry 與能力合約 1.0；API、CLI、Web 可選擇固定 backend ID。
+- 六種確定性來源：CadQuery、Build123d、FreeCAD Python、OpenSCAD、Fusion 360 adapter、SOLIDWORKS adapter。
+- CadQuery／OpenSCAD local runner 保持相容；Build123d 是 opt-in runner；FreeCAD／Fusion 360／SOLIDWORKS 不由伺服器執行。
+- `promptcad capabilities` 與 API planner／backend capability reporting。
+- `backend-report.json`、spec／artifact SHA-256、backend diagnostics、fallback chain 與逐格式結果。
 - 不依賴 CAD kernel 的 A4 三視圖工程草圖 PDF。
 - 幾何驗證閘門、Token、下載路徑保護與工作 ZIP。
+- 一般 JSON body、Feature Tree、圖片、DXF 與 renderer 的 body／併發／timeout／輸出上限。
 
 ## 本封裝已驗證
 
-- 85 個 pytest 測試通過。
-- `app` 測試覆蓋率 81%。
+- 128 個 pytest 測試通過，涵蓋 Phase 1–5 既有與新增流程；`app` 覆蓋率 81%。
 - Python 3.12.13 的 uv 鎖定環境可重現安裝。
 - Ruff 全專案檢查通過（自動排除本機 `.venv` 與生成產物）。
 - Python `compileall` 通過。
@@ -35,10 +40,18 @@
 - DXF STEP 回讀為 1 個有效實體、120×40×6 mm bounding box、4 個 Ø5 mm through holes；兩端 R20 圓弧保持解析幾何。
 - Web 實際操作「DXF 上傳 → 特徵樹 → 人工確認 → 14 個下載入口」通過，無 Console 錯誤；延遲回應不會覆寫較新的上傳分析。
 - 鎖定執行環境的 pip-audit 無已知漏洞。
+- Backend registry 拒絕 path／module／executable 型 ID；六個 source compilers 對共用 DSL fixture 產生確定且語法有效的來源。
+- Prompt injection payload 只保留為 JSON 資料，沒有生成 `system`／`open` 等任意呼叫。
+- Fusion 360 Web 選擇已由 CadQuery 產生並封裝有效 `model.step` 與 `model.fusion360.py`，manifest／backend report 記錄 `fusion360 → cadquery`，且桌面 host 不在伺服器執行。
+- Renderer 缺少要求檔案、輸出簽章錯誤、超量輸出或 exact 特徵失敗時均 fail closed；執行期 fallback 會在完成後更新 provenance。
+- CadQuery v0.4.0 工作已產生完整六來源、`backend-report.json`、逐格式結果與每個 artifact SHA-256。
+- Build123d 0.11.1 已在獨立 venv 實際產生有效 80×40×5 mm STEP，回讀包含兩個半徑 3.3 mm 圓柱孔面。
 
 ## 封裝環境限制
 
-本機已安裝 CadQuery 2.8.0，並以 OpenCascade 實際產生及回讀 ESP32 螢幕外殼的 STEP／STL／DXF／SVG。Docker、OpenSCAD 與 Conda 路徑仍未在本機執行；專案的 Dockerfile 與 Conda 環境固定 CadQuery 2.8.0。
+本機 CadQuery 2.8.0 已以 OpenCascade 實際產生及回讀既有 STEP／STL／DXF／SVG。Build123d 0.11.1 也已在另一個專用 venv 驗收；兩者依賴衝突的 OCP distributions，不能共存於同一環境。Docker、OpenSCAD executable、Conda 與 FreeCAD host runtime 仍未在本機執行；Fusion 360／SOLIDWORKS adapters 也未在授權桌面 CAD host 做端到端驗收。
+
+目前 subprocess 控制是應用層防線，不是 OS sandbox。公開部署必須先將 renderer 移入無外網、低權限、唯讀根目錄並具有 cgroup/seccomp 或平台等效隔離的獨立 worker。
 
 ## 下一階段
 
@@ -48,6 +61,6 @@
 - 正式工程圖、尺寸、公差、BOM 與標題欄。
 - BREP validity、最小壁厚、製程規則與干涉檢查。
 - 非同步 renderer worker、sandbox、配額與多租戶。
-- CAD backend 能力合約、registry、provenance 與跨後端 conformance suite。
-- Build123d／FreeCAD 開源後端，以及隔離的 Fusion 360／SolidWorks adapters。
+- 非同步 OS-sandboxed renderer worker、durable queue、job cancellation 與租戶配額。
+- 在實際 FreeCAD host 與已授權 Fusion 360／SOLIDWORKS workstation 執行人工端到端 adapter 驗收。
 - 圖片四點透視校正、任意閉合輪廓、線與圓弧。

@@ -37,8 +37,16 @@ class _DxfService:
         self.analysis_calls.append((data, thickness_mm, unit_override))
         return _Analysis("a" * 64)
 
-    async def generate_from_dxf_feature_tree(self, analysis, feature_tree, *, formats, render):
-        self.generation = (analysis, feature_tree, formats, render)
+    async def generate_from_dxf_feature_tree(
+        self,
+        analysis,
+        feature_tree,
+        *,
+        formats,
+        render,
+        backend,
+    ):
+        self.generation = (analysis, feature_tree, formats, render, backend)
         return _Manifest()
 
 
@@ -102,7 +110,7 @@ def test_dxf_cli_writes_editable_analysis_and_reanalyzes_before_confirmation(
     assert len(service.analysis_calls) == 2
     assert service.analysis_calls[0] == (b"minimal-dxf", 3.0, "cm")
     assert service.generation[1] == [{"id": "edited-profile"}]
-    assert service.generation[2:] == (["json", "py"], False)
+    assert service.generation[2:] == (["json", "py"], False, "auto")
 
 
 def test_dxf_cli_rejects_oversized_file_before_analysis(tmp_path, monkeypatch, capsys) -> None:

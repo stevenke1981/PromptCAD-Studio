@@ -12,12 +12,23 @@
 ## `GET /health`
 
 ```json
-{"status": "ok", "version": "0.3.0"}
+{"status": "ok", "version": "0.4.0"}
 ```
 
 ## `GET /capabilities`
 
-回傳規劃器、特徵、格式、圖片分析、CadQuery／OpenSCAD 可用狀態及目前設定。
+回傳規劃器、特徵、格式、圖片／DXF 分析、目前設定，以及完整 `CadBackend` 能力合約 1.0：
+
+- `backends[]`：固定 backend ID、compiler／contract version、execution kind、schema／feature／format 支援、runtime 狀態及 semantic fidelity。
+- `planner_capabilities[]`：planner ID、版本、可用狀態、輸入類型與描述。
+
+CLI 可取得同一份機器可讀資訊：
+
+```bash
+promptcad capabilities
+```
+
+後端 registry 是伺服器擁有的關閉 allowlist；API 不接受模組路徑、執行檔、命令參數或外掛設定。
 
 ## `POST /plan`
 
@@ -40,10 +51,23 @@
 {
   "prompt": "長120寬60厚10的固定板，四角M6孔，R5",
   "planner": "auto",
+  "backend": "cadquery",
   "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
   "render": true
 }
 ```
+
+`backend` 的允許值：
+
+- `auto`：CadQuery → OpenSCAD → source-only。
+- `cadquery`：本機 CadQuery runner；可輸出 STEP／STL／DXF／SVG。
+- `build123d`：選用且必須明確指定；runtime 可用時輸出 STEP／STL，否則 source-only。
+- `openscad`：本機 OpenSCAD runner；只輸出 STL，且 fillet／chamfer 會 fail closed。
+- `freecad`：只輸出 `model.freecad.py`，伺服器不執行。
+- `fusion360`、`solidworks`：伺服器不執行 host adapter；`render=true` 時會以可用的 CadQuery／Build123d exact runtime 產生並封裝 adapter 所需的 `model.step`，否則明確降為 source-only。
+- `source_only`：不啟動 CAD runtime。
+
+若明確後端不可用且 `PROMPTCAD_ALLOW_SOURCE_FALLBACK=true`，工作會安全降級並在 diagnostics、fallback chain 與逐格式結果中說明；設為 `false` 時請求回傳 `422`。
 
 ## `POST /generate-from-spec`
 
@@ -66,10 +90,13 @@
     "notes": [],
     "planner": {"planner": "manual", "confidence": 1, "review_required": false}
   },
+  "backend": "source_only",
   "formats": ["step", "stl", "dxf", "svg", "pdf", "py", "scad", "json"],
   "render": true
 }
 ```
+
+所有正式生成路徑都接受相同 `backend` 欄位：`/generate`、`/generate-from-spec`、`/generate-from-image-feature-tree` 與 `/generate-from-dxf-feature-tree`。
 
 ## `POST /image-analysis`
 
@@ -181,6 +208,16 @@ Body 是完整 `CadDocument`。回傳：
 
 `job_id` 必須是系統產生的 32 位十六進位 ID；檔名只接受安全白名單字元，且解析後必須直接位於該工作目錄。
 
+每個 manifest 額外包含：
+
+- `backend_requested`、`backend_used`、`backend_contract_version`。
+- `source_backends`、`backend_diagnostics`、`fallback_chain`。
+- `spec_sha256` 與 `validation_version`。
+- `format_results[]`：每個請求格式的 `produced`、`unavailable`、`failed` 或 `source_only`。
+- `artifacts[].sha256`：下載產物的內容雜湊。
+
+`backend-report.json` 保存能力快照、來源檔 SHA-256、spec hash、選擇結果與診斷。六個來源檔都由 schema 驗證後的受控 DSL 確定性產生；任何 design validation error 都會阻止 runner。
+
 ## 認證
 
 ```http
@@ -203,7 +240,13 @@ curl http://localhost:8000/api/v1/capabilities \
 ## 常見錯誤
 
 - `401`：Token 缺少或錯誤。
-- `413`：圖片或 DXF multipart request 超過伺服器的前置 body 上限。
+- `413`：圖片、DXF、Feature Tree 或一般 JSON generation request 超過對應的前置 body 上限。
 - `404`：工作或檔案不存在，或識別碼／檔名不符合安全格式。
 - `422`：Prompt、DSL、圖片、校準、Feature Tree、格式或 LLM 規劃結果不符合 schema。
 - HTTP `200` 且 manifest `status=failed`：工作已被記錄，但驗證閘門阻止渲染；請查看 `validation.issues`。
+
+## 資源上限
+
+一般 plan／generate／generate-from-spec／validate 預設限制 2 MB body、4 個併發請求；Feature Tree 預設 1 MB／4 併發。Renderer 預設 2 個併發工作、120 秒 timeout、單檔 200 MB、總輸出 500 MB、console 100,000 字元。這些限制可由 `PROMPTCAD_MAX_GENERATE_BODY_BYTES`、`PROMPTCAD_GENERATE_CONCURRENCY`、`PROMPTCAD_RENDER_CONCURRENCY` 及相關環境變數調整。
+
+這些應用層限制不能取代 OS sandbox。公開部署必須把 CAD runner 放入隔離 worker，禁止外網、使用非 root／低權限帳號、唯讀根檔案系統及 cgroup/seccomp 或平台等效控制。

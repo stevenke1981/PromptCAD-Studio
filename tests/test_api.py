@@ -26,6 +26,28 @@ def test_capabilities_advertise_rectangular_side_cutouts(client):
         "LWPOLYLINE",
         "POLYLINE",
     ]
+    backends = {
+        item["backend_id"]: item for item in response.json()["backends"]
+    }
+    assert set(backends) == {
+        "cadquery",
+        "build123d",
+        "freecad",
+        "openscad",
+        "fusion360",
+        "solidworks",
+    }
+    assert backends["cadquery"]["server_render_formats"] == [
+        "step",
+        "stl",
+        "dxf",
+        "svg",
+    ]
+    assert backends["fusion360"]["execution_kind"] == "host_application"
+    assert backends["fusion360"]["local_execution_supported"] is False
+    assert {
+        item["planner_id"] for item in response.json()["planner_capabilities"]
+    } == {"rule", "agent", "llm"}
 
 
 def test_dxf_analysis_review_gate_and_generation(client):
@@ -187,13 +209,37 @@ def test_generate_source_only(client):
     names = {item["filename"] for item in body["artifacts"]}
     assert {
         "spec.json",
+        "backend-report.json",
         "validation.json",
         "model.py",
+        "model.build123d.py",
+        "model.freecad.py",
+        "model.fusion360.py",
+        "model.solidworks.py",
         "model.scad",
         "preview.svg",
         "drawing.pdf",
     } <= names
     assert body["spec"]["base"]["kind"] == "plate"
+    assert body["backend_requested"] == "auto"
+    assert body["backend_used"] == "source_only"
+    assert body["backend_contract_version"] == "1.0"
+    assert set(body["source_backends"]) == {
+        "cadquery",
+        "build123d",
+        "freecad",
+        "openscad",
+        "fusion360",
+        "solidworks",
+    }
+    assert len(body["spec_sha256"]) == 64
+    assert all(len(item["sha256"]) == 64 for item in body["artifacts"])
+    format_status = {
+        item["format"]: item["status"] for item in body["format_results"]
+    }
+    assert format_status["json"] == "produced"
+    assert format_status["py"] == "produced"
+    assert format_status["step"] == "source_only"
 
     job = client.get(f"/api/v1/jobs/{body['job_id']}")
     assert job.status_code == 200
@@ -211,6 +257,139 @@ def test_generate_source_only(client):
 def test_invalid_download_name_rejected(client):
     response = client.get("/api/v1/jobs/not-an-id/files/../../etc/passwd")
     assert response.status_code in {404, 422}
+
+
+def test_external_backend_bundle_contains_validated_step_prerequisite(
+    client,
+    monkeypatch,
+):
+    service = client.app.state.jobs
+    monkeypatch.setattr(
+        service.backends,
+        "_runtime_available",
+        lambda registration: registration.backend_id == "cadquery",
+    )
+    monkeypatch.setattr(service.renderer, "cadquery_available", lambda: True)
+
+    def write_step(command, cwd):
+        assert command[0]
+        (cwd / "model.step").write_text(
+            "ISO-10303-21;\nEND-ISO-10303-21;\n",
+            encoding="ascii",
+        )
+
+    monkeypatch.setattr(service.renderer, "_run", write_step)
+    response = client.post(
+        "/api/v1/generate",
+        json={
+            "prompt": "長80mm寬40mm厚5mm固定板",
+            "planner": "rule",
+            "formats": ["step", "py", "json"],
+            "render": True,
+            "backend": "fusion360",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["renderer_used"] == "cadquery"
+    assert body["backend_used"] == "cadquery"
+    assert body["fallback_chain"] == ["fusion360", "cadquery"]
+    names = {item["filename"] for item in body["artifacts"]}
+    assert {"model.step", "model.fusion360.py"} <= names
+    py_result = next(
+        item for item in body["format_results"] if item["format"] == "py"
+    )
+    assert py_result["filename"] == "model.fusion360.py"
+    assert any(
+        item["code"] == "neutral_step_bridge"
+        for item in body["backend_diagnostics"]
+    )
+    report = client.get(
+        next(
+            item["url"]
+            for item in body["artifacts"]
+            if item["filename"] == "backend-report.json"
+        )
+    ).json()
+    assert report["adapter_target"] == "fusion360"
+    assert report["backend_effective"] == "cadquery"
+    assert report["renderer_used"] == "cadquery"
+
+
+def test_manifest_records_runtime_fallback_after_execution(client, monkeypatch):
+    service = client.app.state.jobs
+    monkeypatch.setattr(
+        service.backends,
+        "_runtime_available",
+        lambda registration: registration.backend_id == "cadquery",
+    )
+    monkeypatch.setattr(service.renderer, "cadquery_available", lambda: True)
+    monkeypatch.setattr(service.renderer, "openscad_available", lambda: True)
+    monkeypatch.setattr("app.services.renderer.shutil.which", lambda _name: "openscad")
+    calls = 0
+
+    def fail_then_write_stl(_command, cwd):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("cadquery runtime failed")
+        (cwd / "model.stl").write_bytes(
+            b"\0" * 80 + (1).to_bytes(4, "little") + b"\0" * 50
+        )
+
+    monkeypatch.setattr(service.renderer, "_run", fail_then_write_stl)
+    response = client.post(
+        "/api/v1/generate",
+        json={
+            "prompt": "長80mm寬40mm厚5mm固定板",
+            "planner": "rule",
+            "formats": ["stl", "json"],
+            "render": True,
+            "backend": "cadquery",
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["renderer_used"] == "openscad"
+    assert body["backend_used"] == "openscad"
+    assert body["fallback_chain"] == ["cadquery", "openscad"]
+    assert any(
+        item["code"] == "runtime_fallback"
+        for item in body["backend_diagnostics"]
+    )
+    report_url = next(
+        item["url"]
+        for item in body["artifacts"]
+        if item["filename"] == "backend-report.json"
+    )
+    report = client.get(report_url).json()
+    assert report["backend_effective"] == "openscad"
+    assert report["fallback_chain"] == ["cadquery", "openscad"]
+
+
+def test_backend_request_is_closed_and_generation_body_is_bounded(client):
+    rejected = client.post(
+        "/api/v1/generate",
+        json={
+            "prompt": "長80mm寬40mm厚5mm固定板",
+            "planner": "rule",
+            "formats": ["json"],
+            "backend": "../../evil",
+        },
+    )
+    assert rejected.status_code == 422
+
+    oversized = b'{"prompt":"' + b"x" * 2_050_000 + b'"}'
+    response = client.post(
+        "/api/v1/generate",
+        content=oversized,
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 413
 
 
 def test_generate_from_edited_spec(client):

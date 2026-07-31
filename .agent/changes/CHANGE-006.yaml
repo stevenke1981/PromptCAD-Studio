@@ -1,0 +1,44 @@
+id: CHANGE-006
+type: architecture_change
+risk: medium
+objective: Complete the Phase 5 closed multi-backend capability contract and selectable source/render workflow.
+scope:
+  - Closed server-owned CadBackend registry and contract version 1.0
+  - Backend selection in REST API, CLI, and Web
+  - Machine-readable backend and planner capabilities
+  - Deterministic CadQuery, Build123d, FreeCAD Python, OpenSCAD, Fusion 360, and SOLIDWORKS sources
+  - Preserved CadQuery and OpenSCAD local runners
+  - Opt-in Build123d STEP and STL local runner
+  - Source-only FreeCAD and host-only Fusion 360 and SOLIDWORKS adapters
+  - backend-report.json, spec and artifact hashes, diagnostics, fallback chain, and format results
+  - JSON body, renderer concurrency, timeout, console, artifact size, path, and signature controls
+protected_behavior:
+  - All accepted Phase 1 through Phase 4 prompt, standard-agent, image, and DXF flows remain compatible
+  - CadDocument 1.0 and 1.1 remain the only geometry input contract
+  - Unknown DSL fields and backend IDs fail closed
+  - Prompt and uploaded content never become executable source
+  - Invalid design geometry never reaches a CAD runtime
+  - Auto preserves CadQuery then OpenSCAD then source-only fallback
+  - FreeCAD, Fusion 360, and SOLIDWORKS never execute on the server
+acceptance:
+  - API, CLI, and Web can select an allowed backend and reject unknown values
+  - promptcad capabilities and GET /api/v1/capabilities expose contract 1.0 data
+  - Six source compilers are deterministic and conform to shared validated DSL fixtures
+  - Every job records backend provenance, hashes, diagnostics, fallback, and per-format outcomes
+  - Build123d in a dedicated environment produces a valid 80 x 40 x 5 mm STEP with two radius 3.3 mm cylindrical hole faces
+  - Phase 1 through Phase 4 regression tests remain green
+status: accepted
+evidence:
+  - 128 pytest tests passed with 81 percent app coverage
+  - Registry path, module, executable, duplicate, and unknown ID tests passed
+  - Cross-backend source determinism, syntax, feature coverage, and prompt-injection tests passed
+  - Fusion 360 Web selection packages model.fusion360.py with a CadQuery-generated validated model.step
+  - Runtime fallback updates manifest and backend-report.json after execution
+  - Exit-zero renderer jobs without requested output fail closed
+  - CadQuery job contains all six sources and backend-report.json
+  - Build123d 0.11.1 was accepted in a separate venv from CadQuery 2.8.0
+limitations:
+  - CadQuery and Build123d extras require separate environments because their OCP distributions conflict
+  - FreeCAD host runtime was not executed
+  - Fusion 360 and SOLIDWORKS require separately licensed desktop hosts and were not end-to-end tested
+  - Public deployment requires an OS-sandboxed renderer worker not included in this change

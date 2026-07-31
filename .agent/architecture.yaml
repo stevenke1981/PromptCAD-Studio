@@ -1,0 +1,116 @@
+updated_at: 2026-07-31
+version: 0.4.0
+architecture:
+  input_paths:
+    - prompt via REST, CLI, or Web
+    - calibrated PNG/JPEG via reviewed image Feature Tree
+    - restricted DXF via reviewed DXF Feature Tree
+    - manually edited CadDocument 1.0 or 1.1
+  planning:
+    contract: planner capabilities expose id, version, availability, input kind, and description
+    implementations:
+      - standard-agent
+      - rule
+      - llm
+  canonical_model:
+    name: CadDocument
+    schema_versions: ["1.0", "1.1"]
+    rules:
+      - extra fields forbidden
+      - units normalized to millimeters
+      - bounded values and feature counts
+      - design validation blocks all CAD runtime execution on error
+  backend_contract:
+    version: "1.0"
+    registry: closed server-owned static allowlist
+    request_boundary:
+      - accepts only registered short backend IDs
+      - rejects import paths, executables, arguments, environments, and plugin metadata
+    selection_surfaces:
+      - REST backend field
+      - CLI --backend
+      - Web CAD backend selector
+    reporting:
+      - GET /api/v1/capabilities
+      - promptcad capabilities
+      - backend-report.json
+      - manifest backend diagnostics and format results
+  backends:
+    cadquery:
+      source: model.py
+      execution: local_process
+      server_formats: [step, stl, dxf, svg]
+      auto_eligible: true
+    build123d:
+      source: model.build123d.py
+      execution: opt_in_local_process
+      server_formats: [step, stl]
+      auto_eligible: false
+      environment: separate venv from CadQuery because OCP distributions conflict
+    freecad:
+      source: model.freecad.py
+      execution: never_on_server
+      server_formats: []
+      host_runtime_tested: false
+    openscad:
+      source: model.scad
+      execution: local_process
+      server_formats: [stl]
+      auto_eligible: true
+      semantic_fidelity: approximated
+    fusion360:
+      source: model.fusion360.py
+      execution: host_application_only
+      server_formats: []
+      input_bridge: sibling model.step
+      host_runtime_tested: false
+    solidworks:
+      source: model.solidworks.py
+      execution: host_application_only
+      server_formats: []
+      input_bridge: sibling model.step
+      host_runtime_tested: false
+  fallback:
+    auto: [cadquery, openscad, source_only]
+    explicit_unavailable_with_fallback: [requested_backend, source_only]
+    desktop_adapter_bridge: [requested_host_adapter, cadquery_or_build123d, source_only]
+    fail_closed_cases:
+      - design validation error
+      - unknown backend ID
+      - OpenSCAD fillet or chamfer semantic loss
+      - missing runtime when source fallback is disabled
+  provenance:
+    spec_hash: canonical JSON SHA-256
+    source_hash: SHA-256 per generated backend source
+    artifact_hash: SHA-256 per manifest artifact
+    records:
+      - backend capability snapshot
+      - requested, selected, and effective backend
+      - fallback chain
+      - per-format produced, unavailable, failed, or source-only result
+  runtime_controls:
+    - request body and concurrency limits before JSON or multipart parsing
+    - fixed renderer concurrency and timeout
+    - shell false and fixed command arrays
+    - private staging, HOME, and TEMP
+    - child environment allowlist
+    - console, single-artifact, and total-artifact limits
+    - bounded stdout and stderr while the child is running
+    - renderer process-tree termination on timeout or output overflow
+    - path, symlink, and output signature verification before atomic promotion
+  public_deployment_boundary:
+    required:
+      - isolated renderer worker
+      - no outbound network
+      - non-root or low-privilege account
+      - read-only root filesystem
+      - cgroup and seccomp or platform-equivalent OS sandbox
+      - authentication, TLS, rate limits, tenant quotas, and retention policy
+    current_status: application controls exist but OS sandbox is not implemented
+accepted_evidence:
+  - 128 pytest tests passed across Phase 1 through Phase 5 with 81 percent app coverage
+  - CadQuery job emitted six sources, backend report, hashes, and format results
+  - Build123d separate environment emitted a valid 80 x 40 x 5 mm STEP
+  - Build123d STEP contains two cylindrical faces with radius 3.3 mm
+  - Fusion 360 Web flow packaged its source with a validated neutral STEP and zero console errors
+  - desktop host adapters are never server-executed

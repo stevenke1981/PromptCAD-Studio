@@ -1,4 +1,4 @@
-id: BASELINE-20260731-005
+id: BASELINE-20260731-006
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -13,12 +13,19 @@ accepted_features:
   - Restricted ASCII and binary DXF closed-profile and circular-hole extraction
   - CadDocument 1.1 profile extrusion with analytic line and three-point arc segments
   - Typed editable DXF Feature Tree with explicit review before rendering
+  - Closed CadBackend registry and capability contract 1.0
+  - Deterministic CadQuery, Build123d, FreeCAD, OpenSCAD, Fusion 360, and SOLIDWORKS sources
+  - Selectable backend in REST API, CLI, and Web
+  - Build123d opt-in STEP and STL runner
+  - Neutral STEP packaging for Fusion 360 and SOLIDWORKS host adapters
+  - Post-execution backend provenance, fallback diagnostics, and artifact hashes
 critical_user_flows:
   - Chinese prompt to validated DSL and downloadable artifacts
   - Edited DSL to regenerated artifacts
   - Invalid geometry blocked before CAD kernel execution
   - Calibrated top-view image to reviewed Feature Tree and downloadable CAD artifacts
   - Bounded DXF to reviewed Feature Tree and downloadable CAD artifacts
+  - Selected desktop adapter to validated neutral STEP and downloadable host bundle
 protected_behavior:
   - Unknown DSL fields are rejected
   - Generated code is deterministic and does not execute prompt text
@@ -26,6 +33,9 @@ protected_behavior:
   - Untrusted uploaded filenames and raw images are not stored as job artifacts
   - Raw DXF bytes and untrusted DXF filenames are not stored as job artifacts
   - Unsupported or ambiguous DXF geometry is blocked before CAD rendering
+  - Backend IDs are selected from a closed server allowlist
+  - Missing or invalid renderer outputs cannot be reported as completed
+  - Exact backends cannot silently omit requested fillets or chamfers
 public_interfaces:
   - CadDocument schema_version 1.0
   - CadDocument schema_version 1.1 profile_extrusion
@@ -37,6 +47,8 @@ public_interfaces:
   - POST /api/v1/dxf-analysis
   - POST /api/v1/dxf-feature-tree-to-spec
   - POST /api/v1/generate-from-dxf-feature-tree
+  - GET /api/v1/capabilities backend and planner contracts
+  - backend selection on generation endpoints and CLI commands
 data_compatibility:
   - Existing CadDocument 1.0 files without cutouts remain valid
   - CadDocument 1.1 is required only for profile_extrusion
@@ -53,7 +65,7 @@ known_limitations:
   - DXF extraction supports one closed 2D modelspace line/arc profile and circular holes only
   - DXF blocks, annotations as geometry, multiple profiles, dimensions, arrays, and multi-view inference are not converted
 evidence:
-  - 85 pytest tests passed
+  - 128 pytest tests passed
   - app coverage 81 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
@@ -66,3 +78,6 @@ evidence:
   - Python dependency audit found no known vulnerabilities
   - Line-and-arc DXF with four circles produced one valid 120 x 40 x 6 mm STEP solid with four verified hole faces
   - Web DXF upload, editable Feature Tree confirmation, 14 download links, and stale-response guard passed with zero console or page errors
+  - CadQuery and Build123d STEP outputs matched one solid, 80 x 40 x 5 mm bounds, and equal volume
+  - Fusion 360 Web selection packaged model.fusion360.py and validated model.step with zero console errors
+  - Runtime fallback provenance, missing-output rejection, bounded streams, process-tree timeout, and strict STL validation passed

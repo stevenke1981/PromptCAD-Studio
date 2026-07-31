@@ -17,15 +17,21 @@ from functools import partial
 from pathlib import Path
 
 from app.core.config import Settings
-from app.models.api import Artifact, JobListItem, JobManifest, PlanResponse
+from app.models.api import (
+    Artifact,
+    BackendDiagnostic,
+    FormatResult,
+    JobListItem,
+    JobManifest,
+    PlanResponse,
+)
 from app.models.cad import CadDocument
 from app.models.dxf import DxfAnalysisResponse, DxfFeatureTreeNode
 from app.models.image import FeatureTreeNode, ImageAnalysisResponse
-from app.services.compiler import CadQueryCompiler
+from app.services.backends import BACKEND_CONTRACT_VERSION, default_backend_registry
 from app.services.drawing_pdf import EngineeringDrawingPdf
 from app.services.dxf_analysis import DxfAnalysisError, DxfFeatureExtractor
 from app.services.image_analysis import ImageFeatureExtractor
-from app.services.openscad import OpenScadCompiler
 from app.services.planners.factory import PlannerFactory
 from app.services.preview import SvgPreview
 from app.services.renderer import Renderer
@@ -38,9 +44,8 @@ class JobService:
         self.settings = settings
         self.planners = PlannerFactory(settings)
         self.validator = DesignValidator()
-        self.compiler = CadQueryCompiler()
+        self.backends = default_backend_registry()
         self.drawing = EngineeringDrawingPdf()
-        self.openscad = OpenScadCompiler()
         self.preview = SvgPreview()
         self.storage = JobStorage(settings)
         self.renderer = Renderer(settings)
@@ -57,6 +62,7 @@ class JobService:
         )
         self._image_slots = asyncio.Semaphore(settings.image_analysis_concurrency)
         self._dxf_slots = asyncio.Semaphore(settings.dxf_analysis_concurrency)
+        self._render_slots = asyncio.Semaphore(settings.render_concurrency)
         self._image_executor = ThreadPoolExecutor(
             max_workers=settings.image_analysis_concurrency,
             thread_name_prefix="promptcad-image",
@@ -79,6 +85,7 @@ class JobService:
         planner_choice: str,
         formats: list[str],
         render: bool,
+        backend: str = "auto",
     ) -> JobManifest:
         plan = await self.plan(prompt, planner_choice)
         return await self._materialize(
@@ -88,6 +95,7 @@ class JobService:
             planner_used=plan.planner_used,
             formats=formats,
             render=render,
+            backend=backend,
         )
 
     async def generate_from_spec(
@@ -95,6 +103,7 @@ class JobService:
         spec: CadDocument,
         formats: list[str],
         render: bool,
+        backend: str = "auto",
     ) -> JobManifest:
         validation = self.validator.validate(spec)
         return await self._materialize(
@@ -104,6 +113,7 @@ class JobService:
             planner_used="manual-dsl",
             formats=formats,
             render=render,
+            backend=backend,
         )
 
     async def analyze_image(
@@ -343,6 +353,7 @@ class JobService:
         *,
         formats: list[str],
         render: bool,
+        backend: str = "auto",
     ) -> JobManifest:
         plan = self.image_feature_tree_to_spec(
             analysis,
@@ -367,6 +378,7 @@ class JobService:
             planner_used="image-feature-tree",
             formats=formats,
             render=render,
+            backend=backend,
             extra_json_artifacts={
                 "image-analysis.json": analysis_payload,
                 "feature-tree.json": [
@@ -399,6 +411,7 @@ class JobService:
         *,
         formats: list[str],
         render: bool,
+        backend: str = "auto",
     ) -> JobManifest:
         plan = self.dxf_feature_tree_to_spec(analysis, feature_tree)
         analysis_payload = analysis.model_dump(
@@ -420,6 +433,7 @@ class JobService:
             planner_used="dxf-feature-tree",
             formats=formats,
             render=render,
+            backend=backend,
             extra_json_artifacts={
                 "dxf-analysis.json": analysis_payload,
                 "dxf-feature-tree.json": [
@@ -487,25 +501,59 @@ class JobService:
         planner_used: str,
         formats: list[str],
         render: bool,
+        backend: str = "auto",
         extra_json_artifacts: dict[str, object] | None = None,
     ) -> JobManifest:
+        selection_request = (
+            self.settings.render_backend
+            if backend == "auto" and self.settings.render_backend != "auto"
+            else backend
+        )
+        selection = self.backends.select(
+            selection_request,
+            doc=spec,
+            formats=formats,
+            render=render,
+            allow_source_fallback=self.settings.allow_source_fallback,
+        )
         job_id, job_dir = self.storage.create()
         created_at = datetime.now(UTC).isoformat()
         warnings: list[str] = []
+        backend_diagnostics: list[BackendDiagnostic] = list(selection.diagnostics)
+        fallback_chain = list(selection.fallback_chain)
         error: str | None = None
         renderer_used = "not-run"
         status = "source_only"
+        canonical_spec = json.dumps(
+            spec.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        spec_sha256 = hashlib.sha256(canonical_spec).hexdigest()
 
         self.storage.write_json(job_dir / "spec.json", spec.model_dump(mode="json"))
         self.storage.write_json(
             job_dir / "validation.json",
             validation.model_dump(mode="json"),
         )
-        self.storage.write_text(job_dir / "model.py", self.compiler.compile(spec))
-        try:
-            self.storage.write_text(job_dir / "model.scad", self.openscad.compile(spec))
-        except ValueError as exc:
-            warnings.append(f"OpenSCAD 原始碼已略過：{exc}")
+        source_backends: list[str] = []
+        sources, source_diagnostics = self.backends.compile_sources(spec)
+        backend_diagnostics.extend(source_diagnostics)
+        for source in sources:
+            self.storage.write_text(job_dir / source.filename, source.content)
+            source_backends.append(source.backend_id)
+        source_records = [
+            {
+                "backend_id": source.backend_id,
+                "filename": source.filename,
+                "sha256": hashlib.sha256(
+                    source.content.encode("utf-8")
+                ).hexdigest(),
+            }
+            for source in sources
+        ]
+        warnings.extend(item.message for item in backend_diagnostics)
         for filename, payload in (extra_json_artifacts or {}).items():
             if filename not in {
                 "image-analysis.json",
@@ -533,10 +581,54 @@ class JobService:
             )
         elif render:
             try:
-                result = await asyncio.to_thread(self.renderer.render, job_dir, formats)
+                render_formats = list(dict.fromkeys(formats))
+                selected_registration = (
+                    self.backends.get(selection.requested)
+                    if selection.requested not in {"auto", "source_only"}
+                    else None
+                )
+                if (
+                    selected_registration is not None
+                    and selected_registration.execution_kind == "host_application"
+                    and selection.effective in {"cadquery", "build123d"}
+                    and "step" not in render_formats
+                ):
+                    render_formats.append("step")
+                async with self._render_slots:
+                    result = await asyncio.to_thread(
+                        self.renderer.render,
+                        job_dir,
+                        render_formats,
+                        selection.effective,
+                    )
                 renderer_used = result.renderer
                 status = result.status
                 warnings.extend(result.warnings)
+                fallback_chain = self._merge_fallback_chains(
+                    fallback_chain,
+                    result.fallback_chain,
+                )
+                if result.fallback_chain and len(result.fallback_chain) > 1:
+                    backend_diagnostics.append(
+                        BackendDiagnostic(
+                            backend_id=result.renderer,
+                            severity="warning",
+                            code="runtime_fallback",
+                            message=(
+                                "CAD runtime 執行期間已降級："
+                                + " → ".join(result.fallback_chain)
+                            ),
+                        )
+                    )
+                for message in result.diagnostics:
+                    backend_diagnostics.append(
+                        BackendDiagnostic(
+                            backend_id=result.renderer,
+                            severity="warning",
+                            code="runtime_diagnostic",
+                            message=message,
+                        )
+                    )
             except RuntimeError as exc:
                 status = "failed"
                 renderer_used = "failed"
@@ -545,7 +637,51 @@ class JobService:
             renderer_used = "not-run"
             warnings.append("render=false：只產生 DSL 與 CAD 原始碼。")
 
+        if renderer_used in {*self.backends.ids, "source_only"}:
+            backend_used = renderer_used
+        else:
+            backend_used = "source_only"
+        self.storage.write_json(
+            job_dir / "backend-report.json",
+            {
+                "contract_version": BACKEND_CONTRACT_VERSION,
+                "spec_sha256": spec_sha256,
+                "backend_requested": backend,
+                "backend_selected": selection.requested,
+                "backend_effective": backend_used,
+                "adapter_target": (
+                    selection.requested
+                    if selection.requested not in {"auto", "source_only"}
+                    and self.backends.get(selection.requested).execution_kind
+                    == "host_application"
+                    else None
+                ),
+                "renderer_used": renderer_used,
+                "status": status,
+                "fallback_chain": fallback_chain,
+                "sources": source_records,
+                "capabilities": [
+                    item.model_dump(mode="json")
+                    for item in self.backends.capabilities()
+                ],
+                "diagnostics": [
+                    item.model_dump(mode="json")
+                    for item in backend_diagnostics
+                ],
+            },
+        )
         artifacts = self._artifacts(job_id, job_dir)
+        source_backend = (
+            selection.requested
+            if selection.requested not in {"auto", "source_only"}
+            else backend_used
+        )
+        format_results = self._format_results(
+            formats,
+            artifacts,
+            status,
+            source_backend=source_backend,
+        )
         manifest = JobManifest(
             job_id=job_id,
             status=status,
@@ -559,6 +695,15 @@ class JobService:
             artifacts=artifacts,
             warnings=warnings,
             error=error,
+            backend_requested=backend,
+            backend_used=backend_used,
+            backend_contract_version=BACKEND_CONTRACT_VERSION,
+            source_backends=source_backends,
+            backend_diagnostics=backend_diagnostics,
+            format_results=format_results,
+            fallback_chain=fallback_chain,
+            spec_sha256=spec_sha256,
+            completed_at=datetime.now(UTC),
         )
         self.storage.write_json(job_dir / "manifest.json", manifest.model_dump(mode="json"))
         return manifest
@@ -602,6 +747,90 @@ class JobService:
                     media_type=media_type,
                     size=path.stat().st_size,
                     url=f"/api/v1/jobs/{job_id}/files/{path.name}",
+                    sha256=JobService._sha256_file(path),
                 )
             )
         return artifacts
+
+    @staticmethod
+    def _format_results(
+        requested_formats: list[str],
+        artifacts: list[Artifact],
+        status: str,
+        *,
+        source_backend: str,
+    ) -> list[FormatResult]:
+        names = {artifact.filename for artifact in artifacts}
+        expected = {
+            "step": "model.step",
+            "stl": "model.stl",
+            "dxf": "model.dxf",
+            "svg": "model.svg",
+            "pdf": "drawing.pdf",
+            "py": {
+                "build123d": "model.build123d.py",
+                "freecad": "model.freecad.py",
+                "fusion360": "model.fusion360.py",
+                "solidworks": "model.solidworks.py",
+            }.get(source_backend, "model.py"),
+            "scad": "model.scad",
+            "json": "spec.json",
+        }
+        results: list[FormatResult] = []
+        for fmt in dict.fromkeys(requested_formats):
+            filename = expected[fmt]
+            if filename in names:
+                results.append(
+                    FormatResult(
+                        format=fmt,
+                        status="produced",
+                        filename=filename,
+                    )
+                )
+            elif status == "failed":
+                results.append(
+                    FormatResult(
+                        format=fmt,
+                        status="failed",
+                        reason="Job failed before this artifact was produced.",
+                    )
+                )
+            elif status == "source_only":
+                results.append(
+                    FormatResult(
+                        format=fmt,
+                        status="source_only",
+                        reason="No compatible server-side CAD runtime produced this format.",
+                    )
+                )
+            else:
+                results.append(
+                    FormatResult(
+                        format=fmt,
+                        status="unavailable",
+                        reason="The selected backend does not produce this format.",
+                    )
+                )
+        return results
+
+    @staticmethod
+    def _merge_fallback_chains(
+        selected: list[str],
+        runtime: list[str],
+    ) -> list[str]:
+        if not runtime:
+            return selected
+        merged = list(selected)
+        start = 1 if merged and merged[-1] == runtime[0] else 0
+        for backend_id in runtime[start:]:
+            if not merged or merged[-1] != backend_id:
+                merged.append(backend_id)
+        return merged
+
+    @staticmethod
+    def _sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+        return digest.hexdigest()

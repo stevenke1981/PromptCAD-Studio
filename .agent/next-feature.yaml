@@ -1,13 +1,14 @@
 evaluated_at: 2026-07-31
 autonomy: recommend_only
-selected: CadBackend capability contract and cross-backend conformance suite
+selected: OS-sandboxed asynchronous renderer worker
 evidence:
-  - The restricted DXF-to-Feature-Tree phase-four slice is accepted.
-  - The roadmap identifies a formal backend contract as the first phase-five milestone.
-  - CadQuery and OpenSCAD already share DSL semantics but do not expose a common capability registry.
+  - Phase 5 accepted the closed CadBackend contract, six deterministic sources, selection surfaces, provenance, and conformance suite.
+  - CadQuery, Build123d, and OpenSCAD are native-code runtimes currently guarded by application-level subprocess controls.
+  - Public deployment still lacks an OS sandbox, durable queue, per-job cancellation, and tenant quotas.
 scope_candidate:
-  - Define backend capabilities, supported features, formats, and provenance
-  - Add a backend registry without changing existing public generation behavior
-  - Build conformance fixtures for CadQuery and OpenSCAD
-  - Prepare bounded adapters for Build123d and FreeCAD
-reason_not_implemented: This is a separate architecture change that needs an ADR, compatibility plan, and expanded cross-backend regression scope.
+  - Move all local CAD execution into an isolated worker service
+  - Add a durable job queue, cancellation, retry policy, and per-job resource budgets
+  - Disable outbound networking and run with a low-privilege identity and read-only root filesystem
+  - Apply cgroup and seccomp or platform-equivalent CPU, memory, process, and filesystem controls
+  - Preserve contract 1.0, manifests, hashes, fallback semantics, and Phase 1 through 5 flows
+reason_not_implemented: This changes deployment topology and requires an operations choice for queue, persistence, container runtime, and production isolation policy.

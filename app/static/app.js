@@ -1,6 +1,8 @@
 const $ = (selector) => document.querySelector(selector);
 const promptEl = $('#prompt');
 const plannerEl = $('#planner');
+const backendEl = $('#backend');
+const backendNoteEl = $('#backend-note');
 const tokenEl = $('#token');
 const generateBtn = $('#generate');
 const statusEl = $('#status');
@@ -39,7 +41,47 @@ function authHeaders(includeJson = true) {
 }
 
 function formats() {
-  return [...document.querySelectorAll('.checks input:checked')].map((el) => el.value);
+  return [...document.querySelectorAll('.checks input:checked:not(:disabled)')].map((el) => el.value);
+}
+
+let backendCapabilities = [];
+
+function applyBackendCapability() {
+  const backend = backendEl.value;
+  const kernelFormats = new Set(['step', 'stl', 'dxf', 'svg']);
+  const capability = backendCapabilities.find((item) => item.backend_id === backend);
+  const serverFormats = new Set(capability?.server_render_formats || []);
+  if (capability?.execution_kind === 'host_application') serverFormats.add('step');
+  for (const input of document.querySelectorAll('.checks input')) {
+    if (!kernelFormats.has(input.value)) continue;
+    input.disabled = Boolean(
+      capability && !serverFormats.has(input.value),
+    );
+  }
+  if (backend === 'auto') {
+    backendNoteEl.textContent = '自動選擇可用且相容的本機 CAD 核心。';
+  } else if (!capability) {
+    backendNoteEl.textContent = '尚未取得後端能力資訊。';
+  } else if (capability.runtime_available) {
+    backendNoteEl.textContent =
+      `${capability.display_name} 可在伺服器執行；格式：${capability.server_render_formats.join(', ') || '來源'}`;
+  } else if (capability.execution_kind === 'host_application') {
+    backendNoteEl.textContent =
+      `${capability.display_name} adapter 將連同伺服器產生的已驗證 STEP 打包；桌面 CAD 不會在伺服器啟動。`;
+  } else {
+    backendNoteEl.textContent =
+      `${capability.display_name} 僅輸出受控來源／adapter；不會在伺服器啟動桌面 CAD。`;
+  }
+}
+
+async function loadCapabilities() {
+  try {
+    const data = await api('/api/v1/capabilities');
+    backendCapabilities = data.backends || [];
+    applyBackendCapability();
+  } catch (error) {
+    backendNoteEl.textContent = `後端能力讀取失敗：${error.message}`;
+  }
 }
 
 function setStatus(text, error = false) {
@@ -306,6 +348,7 @@ generateBtn.addEventListener('click', async () => {
       body: JSON.stringify({
         prompt,
         planner: plannerEl.value,
+        backend: backendEl.value,
         formats: formats(),
         render: true,
       }),
@@ -441,6 +484,7 @@ generateFeatureTreeBtn.addEventListener('click', async () => {
         feature_tree: featureTree,
         formats: formats(),
         render: true,
+        backend: backendEl.value,
       }),
       },
     );
@@ -475,7 +519,12 @@ regenerateBtn.addEventListener('click', async () => {
   try {
     const data = await api('/api/v1/generate-from-spec', {
       method: 'POST',
-      body: JSON.stringify({spec, formats: formats(), render: true}),
+      body: JSON.stringify({
+        spec,
+        formats: formats(),
+        render: true,
+        backend: backendEl.value,
+      }),
     });
     showManifest(data);
     setStatus(`完成：${data.renderer_used} / ${data.status}`);
@@ -530,8 +579,13 @@ function escapeHtml(value) {
 }
 
 $('#refresh').addEventListener('click', loadJobs);
-tokenEl.addEventListener('change', loadJobs);
+backendEl.addEventListener('change', applyBackendCapability);
+tokenEl.addEventListener('change', () => {
+  void loadCapabilities();
+  void loadJobs();
+});
 window.addEventListener('beforeunload', () => {
   if (activePreviewUrl) URL.revokeObjectURL(activePreviewUrl);
 });
 void loadJobs();
+void loadCapabilities();
