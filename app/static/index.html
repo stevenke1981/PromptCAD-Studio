@@ -78,7 +78,7 @@
           <div class="eyebrow">IMAGE → FEATURE TREE</div>
           <h2>圖片／草圖轉 CAD</h2>
         </div>
-        <p>支援高對比、單一零件的 PNG/JPEG、掃描圖與 PDF 頁面；矩形照片可選擇透視校正，自由閉合輪廓會建立可編輯折線 Feature Tree。</p>
+        <p>支援零件照片、手繪、白板、專利圖、掃描圖與 PDF；多物件／多視圖會列出候選並要求明確選擇，確認後才建立 CAD。</p>
         <label>選擇圖片或 PDF
           <input id="image-file" type="file" accept="image/png,image/jpeg,application/pdf,.pdf" />
         </label>
@@ -92,10 +92,27 @@
           <label>PDF 頁碼（從 1 開始）
             <input id="image-page" type="number" min="1" max="20" step="1" value="1" />
           </label>
+          <label>來源類型
+            <select id="image-content-profile">
+              <option value="auto">自動判斷</option>
+              <option value="photo">零件照片</option>
+              <option value="sketch">手繪草圖</option>
+              <option value="whiteboard">白板草圖</option>
+              <option value="patent">專利圖</option>
+              <option value="scan">掃描圖</option>
+            </select>
+          </label>
+          <label>物件／視圖候選（從 0 開始，可留空）
+            <input id="image-object-index" type="number" min="0" max="31" step="1" placeholder="偵測歧義後再選擇" />
+          </label>
         </div>
         <label class="perspective-option">
           <input id="perspective-correction" type="checkbox" />
           四角矩形板照片：執行透視校正（不適用真正的梯形零件）
+        </label>
+        <label class="perspective-option">
+          <input id="accept-line-art-holes" type="checkbox" />
+          明確接受線描圓為通孔（可能其實是圓形標註或數字 0，請先檢查候選）
         </label>
         <button id="analyze-image" class="secondary full" type="button">分析圖片並建立 Feature Tree</button>
       </section>

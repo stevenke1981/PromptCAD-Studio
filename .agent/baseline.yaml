@@ -1,4 +1,4 @@
-id: BASELINE-20260731-009
+id: BASELINE-20260801-011
 status: passed
 accepted_features:
   - Natural-language planning to CadDocument 1.0
@@ -12,6 +12,9 @@ accepted_features:
   - Rectangles, arbitrary closed polygon profiles, and circular-hole extraction
   - Opt-in four-corner perspective correction with ambiguous default rejection
   - Typed editable image Feature Tree with explicit review before rendering
+  - Explicit photo, sketch, whiteboard, patent, scan, and automatic image content profiles
+  - Bounded object and view candidates with fail-closed ambiguity and explicit selection
+  - Outlined sketch and whiteboard circular-hole recovery with duplicate suppression
   - Restricted ASCII and binary DXF closed-profile and circular-hole extraction
   - CadDocument 1.1 profile extrusion with analytic line and three-point arc segments
   - Typed editable DXF Feature Tree with explicit review before rendering
@@ -28,6 +31,10 @@ accepted_features:
   - Atomic claim, lease, heartbeat, bounded retry, crash recovery, and cancellation
   - REST, CLI, and Web queue clients with reload recovery and result manifest linkage
   - Hardened no-network Docker worker deployment profile
+  - ManufacturingDrawingSpec 1.0 bound to immutable CadDocument geometry
+  - Typed dimensions, tolerances, datums, surface finish, BOM, title block, and revision history
+  - Searchable bounded manufacturing PDF and additive draft, review, approval, or rejection derivatives
+  - Persistent hash-verified manufacturing review lifecycle with optimistic concurrency and interrupted-claim recovery
 critical_user_flows:
   - Chinese prompt to validated DSL and downloadable artifacts
   - Edited DSL to regenerated artifacts
@@ -35,11 +42,13 @@ critical_user_flows:
   - Calibrated top-view image to reviewed Feature Tree and downloadable CAD artifacts
   - Selected PDF page to reviewed Feature Tree and CAD preview
   - Arbitrary closed image contour to CadDocument 1.1 profile extrusion
+  - Patent-style multi-view image to visible candidates, explicit view selection, reviewed Feature Tree, and real CAD output
   - Bounded DXF to reviewed Feature Tree and downloadable CAD artifacts
   - CENTER half-profile DXF to reviewed revolution Feature Tree, preview, and downloadable CAD artifacts
   - Selected desktop adapter to validated neutral STEP and downloadable host bundle
   - Background prompt to durable queue, independent worker, and downloadable artifacts
   - Reloaded Web session to recovered queue status and safe cancellation
+  - Two-hole plate to manufacturing template, searchable PDF, submit, approve, persisted review history, and verified ZIP
 protected_behavior:
   - Unknown DSL fields are rejected
   - Generated code is deterministic and does not execute prompt text
@@ -54,6 +63,9 @@ protected_behavior:
   - Only the lease-owning worker can publish a queue transition
   - A cancellation that wins before terminal publication cannot expose a completed manifest
   - Missing or unauthorized queue polling does not permanently lock Web controls or discard recoverable state
+  - Ambiguous image objects or patent views never silently choose manufacturing geometry
+  - Manufacturing geometry, drawing intent, PDFs, and state snapshots remain hash-bound
+  - Expired interrupted manufacturing claims recover only after their lease and preserve active cross-process claims
 public_interfaces:
   - CadDocument schema_version 1.0
   - CadDocument schema_version 1.1 profile_extrusion
@@ -74,6 +86,12 @@ public_interfaces:
   - POST /api/v1/async/jobs/{queue_job_id}/cancel
   - promptcad async-generate, async-render, queue-list, queue-status, and queue-cancel
   - promptcad-worker
+  - image content_profile and object_index on REST, CLI, and Web
+  - POST /api/v1/manufacturing-template
+  - GET /api/v1/jobs/{job_id}/manufacturing-review
+  - POST /api/v1/jobs/{job_id}/manufacturing-review/transitions
+  - promptcad manufacturing-template and manufacturing-review
+  - ManufacturingDrawingSpec schema_version 1.0
 data_compatibility:
   - Existing CadDocument 1.0 files without cutouts remain valid
   - CadDocument 1.1 is required only for profile_extrusion
@@ -83,18 +101,20 @@ environment:
   - Python 3.12.13
   - CadQuery 2.8.0
 known_limitations:
-  - Drawing PDF is a dimensioned draft, not a complete manufacturing drawing
+  - Legacy drawing.pdf remains a dimensioned draft unless a ManufacturingDrawingSpec is supplied
+  - ManufacturingDrawingSpec 1.0 is bounded and does not claim complete ASME Y14.5 or ISO GPS coverage
   - Physical thread geometry is not generated
   - Docker, OpenSCAD executable, and Conda paths were not run locally
   - Hardened Compose YAML passed static validation but Docker runtime was unavailable locally
-  - Image extraction requires one high-contrast closed part, an explicit real-world longest-edge calibration, and user-supplied thickness
-  - Line and arc reconstruction, occlusion, reflection, scale OCR, multiple parts, and multi-view inference require future modes
+  - Image extraction requires an explicit real-world longest-edge calibration and user-supplied thickness
+  - Multiple image objects or patent views require an explicit candidate selection before conversion
+  - Occlusion, reflection, scale OCR, automatic thickness, and arbitrary analytic image arcs require future modes
   - DXF extraction supports one closed 2D modelspace profile or one CENTER-closed half-profile
   - Revolution first slice does not accept holes, cutouts, fillets, or chamfers
   - DXF blocks, annotations as geometry, multiple profiles, dimensions, partial arrays, and multi-view inference are not converted
 evidence:
-  - 180 pytest tests passed
-  - app coverage 82 percent
+  - 219 pytest tests passed
+  - app coverage 84 percent
   - Ruff, compileall, node check, and smoke test passed
   - First-phase mounting block STEP imported as one 120 x 60 x 30 mm solid
   - Drawing PDF has one page and top, front, and right views
@@ -116,3 +136,7 @@ evidence:
   - Web reload recovery, queued cancel, offline cancel, orphan cleanup, completed result, and 12 download links passed
   - Independent CLI worker produced a completed result URL
   - Phase 6 code review approved with zero remaining findings
+  - Photo, sketch, whiteboard, patent, scan, auto, and PDF image profiles passed focused tests
+  - Patent two-view Web flow blocked ambiguity, accepted explicit view 1, and completed CadQuery output with 19 downloads and zero console errors
+  - Manufacturing Web flow completed draft version 0, in-review version 1, approved version 2, persistence reload, 21 downloads, and zero console errors
+  - Interrupted manufacturing claim recovery and active cross-process claim protection passed regression tests

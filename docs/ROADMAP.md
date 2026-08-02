@@ -32,7 +32,7 @@
 
 ## 第三階段：圖片／草圖轉 CAD
 
-狀態：Phase 3 垂直切片已完成：校準圖片／PDF 頁面、矩形與任意閉合折線、圓孔及可選矩形透視校正。
+狀態：Phase 3 垂直流程已完成：照片、手繪、白板、專利、掃描、校準圖片／PDF 頁面、多物件候選、矩形與任意閉合折線、填色孔、需明確接受的線描圓候選及可選矩形透視校正。
 
 輸入：零件照片、手繪草圖、白板草圖、專利圖、PDF 與掃描圖。
 
@@ -45,7 +45,7 @@
 
 尺寸推估必須標示信心；沒有比例尺、已知尺寸或多視角時，不把估計值當作製造尺寸。
 
-目前切片已具備：PNG/JPEG 與多頁 PDF 安全解碼、頁面選擇、外框最長邊校準、旋轉矩形、任意閉合折線與圓孔擷取、明確啟用的四點矩形透視校正、信心分數、來源 SHA-256、可編輯 Feature Tree、人工確認、CadDocument 1.0／1.1、STEP/STL/DXF/SVG/PDF 輸出。未校正的凸四邊形預設阻擋；後續再擴充線／圓弧、比例尺 OCR、遮擋／反光處理與真實照片驗證集。
+目前已具備：PNG/JPEG 與多頁 PDF 安全解碼、頁面選擇、`auto|photo|sketch|whiteboard|patent|scan` profile、外框最長邊校準、最多 32 個可見物件／視圖候選、明確候選選取、旋轉矩形、任意閉合折線、填色孔與具來源／不確定範圍的線描圓候選、明確四點透視校正、信心、來源 SHA-256、可編輯 Feature Tree、人工確認、CadDocument 1.0／1.1 及真實 STEP/STL/DXF/SVG/PDF 輸出。未選取的多視圖、未接受的線描圓與未校正透視歧義預設阻擋或排除；比例尺 OCR、任意解析圓弧、自動厚度及嚴重遮擋／反光仍不會假裝完成。
 
 ## 第四階段：2D 工程圖轉 3D
 
@@ -112,6 +112,21 @@ Web／REST／CLI enqueue
 - cooperative cancellation 會越過 planning／validation／materialization 邊界並終止 renderer 程序樹。
 - Docker Compose worker 與 hardened override：無外網、唯讀 root、capability drop、no-new-privileges、CPU／memory／PID 上限；API 在此 profile 強制 source-only。
 
+## 第七階段：可製造工程圖與審核工作包
+
+狀態：完整垂直流程已完成。
+
+```text
+CadDocument hash
+  → ManufacturingDrawingSpec 1.0
+  → 尺寸／公差／基準／Ra／BOM／標題欄／revision
+  → 可搜尋製造圖 PDF
+  → draft → in_review → approved | rejected
+  → append-only spec／PDF／review evidence
+```
+
+REST、CLI、Web 與背景 worker 都可建立製造圖工作包；每次狀態轉換重新驗證幾何與文件 SHA-256、使用 `expected_version` 阻止舊狀態覆寫，並以有限 lease 的跨程序 claim 防止併發及支援中斷後復原。操作者名稱是自我聲明 metadata，不是法律或密碼學簽章。
+
 ## 下一個建議里程碑
 
-補齊可製造工程圖：尺寸約束、基準、公差、表面處理、BOM 與簽核狀態；同時擴充 2D 工程圖的工程圖 PDF、多視圖配對、尺寸註記與歧義候選。正式多租戶服務另需 PostgreSQL／外部 queue、租戶配額、retention、速率限制與平台核准的 seccomp／AppArmor policy。FreeCAD／Fusion 360／SOLIDWORKS host runtime 仍需各自授權環境的人工端到端驗收。
+圖片尺寸標註／比例尺 OCR 與解析 line／circle／three-point arc Feature Tree。它需要新的 OCR runtime 與版本化真實資料集，因此目前只建議、不自動選定依賴。FreeCAD／Fusion 360／SOLIDWORKS host runtime 仍需各自授權環境的人工端到端驗收。

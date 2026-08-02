@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
 
@@ -251,6 +252,102 @@ def test_manufacturing_review_serializes_competing_expected_versions(client, set
     assert len(current.json()["events"]) == 1
     job_dir = settings.data_dir / job_id
     assert len(list(job_dir.glob("drawing-review-v*.pdf"))) == 1
+
+
+def test_manufacturing_review_serializes_across_service_instances(settings):
+    with (
+        TestClient(create_app(settings)) as first,
+        TestClient(create_app(settings)) as second,
+    ):
+        job_id, _drawing_spec = _create_manufacturing_job(first)
+
+        def submit(entry):
+            client, reviewer = entry
+            return _transition(
+                client,
+                job_id,
+                action="submit",
+                expected_version=0,
+                reviewer=reviewer,
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(
+                executor.map(
+                    submit,
+                    [(first, "Process One"), (second, "Process Two")],
+                )
+            )
+
+        assert sorted(response.status_code for response in responses) == [200, 409]
+        persisted = first.get(f"/api/v1/jobs/{job_id}/manufacturing-review")
+        assert persisted.status_code == 200, persisted.text
+        assert persisted.json()["version"] == 1
+        assert len(persisted.json()["events"]) == 1
+
+
+def test_manufacturing_review_recovers_expired_interrupted_claim(client, settings):
+    job_id, _drawing_spec = _create_manufacturing_job(client)
+    job_dir = settings.data_dir / job_id
+    claim = job_dir / "manufacturing-review-v001.claim"
+    orphan_pdf = job_dir / "drawing-review-v001-in_review-interrupted.pdf"
+    orphan_spec = job_dir / "drawing-spec-review-v001-interrupted.json"
+    claim.write_text(
+        json.dumps(
+            {
+                "claim_id": "interrupted-process",
+                "created_at": "2000-01-01T00:00:00+00:00",
+                "lease_expires_at": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    orphan_pdf.write_bytes(b"partial pdf")
+    orphan_spec.write_text("{}", encoding="utf-8")
+
+    submitted = _transition(
+        client,
+        job_id,
+        action="submit",
+        expected_version=0,
+        note="Recover interrupted transaction",
+    )
+
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["version"] == 1
+    assert not claim.exists()
+    assert not orphan_pdf.exists()
+    assert not orphan_spec.exists()
+    assert len(list(job_dir.glob("drawing-review-v001-*.pdf"))) == 1
+    assert len(list(job_dir.glob("drawing-spec-review-v001-*.json"))) == 1
+
+
+def test_manufacturing_review_preserves_an_active_cross_process_claim(client, settings):
+    job_id, _drawing_spec = _create_manufacturing_job(client)
+    job_dir = settings.data_dir / job_id
+    claim = job_dir / "manufacturing-review-v001.claim"
+    claim.write_text(
+        json.dumps(
+            {
+                "claim_id": "active-other-process",
+                "created_at": "2099-01-01T00:00:00+00:00",
+                "lease_expires_at": 4_070_908_800,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = _transition(
+        client,
+        job_id,
+        action="submit",
+        expected_version=0,
+    )
+
+    assert response.status_code == 409
+    assert claim.exists()
+    assert not list(job_dir.glob("drawing-review-v001-*.pdf"))
+    assert not list(job_dir.glob("drawing-spec-review-v001-*.json"))
 
 
 def test_non_manufacturing_generate_from_spec_remains_compatible(client):

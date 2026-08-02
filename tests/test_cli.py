@@ -57,6 +57,9 @@ class _ImageService:
         thickness_mm,
         perspective_correction,
         page_index,
+        content_profile,
+        object_index,
+        accept_line_art_holes,
     ):
         self.analysis_calls.append(
             (
@@ -65,6 +68,9 @@ class _ImageService:
                 thickness_mm,
                 perspective_correction,
                 page_index,
+                content_profile,
+                object_index,
+                accept_line_art_holes,
             )
         )
         if self.error is not None:
@@ -132,8 +138,38 @@ def test_image_cli_forwards_pdf_page_and_perspective_options(
     )
 
     assert args.func(args) == 0
-    assert service.analysis_calls == [(b"%PDF-test", 120.0, 4.0, True, 1)]
+    assert service.analysis_calls == [
+        (b"%PDF-test", 120.0, 4.0, True, 1, "auto", None, False)
+    ]
     assert json.loads(capsys.readouterr().out)["source_page_index"] == 1
+
+
+def test_image_cli_forwards_content_profile_and_object_selection(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "patent.png"
+    source.write_bytes(b"image-bytes")
+    service = _ImageService()
+    monkeypatch.setattr(cli, "JobService", lambda _settings: service)
+    monkeypatch.setattr(cli, "get_settings", lambda: object())
+    args = _image_args(
+        str(source),
+        "--known-length",
+        "80",
+        "--thickness",
+        "3",
+        "--content-profile",
+        "patent",
+        "--object-index",
+        "1",
+        "--accept-line-art-holes",
+    )
+
+    assert args.func(args) == 0
+    assert service.analysis_calls == [
+        (b"image-bytes", 80.0, 3.0, False, 0, "patent", 1, True)
+    ]
 
 
 def test_image_cli_reports_analysis_error_without_traceback(

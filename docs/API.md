@@ -145,6 +145,9 @@ promptcad-worker
 - `thickness_mm`：使用者量測或指定的零件厚度。
 - `page_index`：PDF 的零起算頁碼，預設 0；圖片只能使用 0。
 - `perspective_correction`：預設 `false`；只在來源確實為矩形板的凸四角照片時啟用。
+- `content_profile`：`auto`、`photo`、`sketch`、`whiteboard`、`patent` 或 `scan`；預設 `auto`。
+- `object_index`：零起算的物件／視圖候選索引。多物件或多視圖未指定時只回傳候選並令 `convertible=false`。
+- `accept_line_art_holes`：預設 `false`。只有明確設為 `true` 才會把線描圓候選加入 CAD 通孔；回傳候選仍包含辨識來源、直徑上下界及是否已接受。
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/image-analysis \
@@ -152,10 +155,13 @@ curl -X POST http://localhost:8000/api/v1/image-analysis \
   -F "known_length_mm=100" \
   -F "thickness_mm=5" \
   -F "page_index=0" \
+  -F "content_profile=patent" \
+  -F "object_index=1" \
+  -F "accept_line_art_holes=false" \
   -F "perspective_correction=false"
 ```
 
-成功回傳來源頁面、校準端點、比例、矩形或自由折線外框、圓孔、信心、可編輯 `feature_tree`、`proposed_spec` 與 validation。矩形使用 `CadDocument 1.0 plate`，自由輪廓使用 `CadDocument 1.1 profile_extrusion`。`convertible=false` 表示外框或幾何不足以安全轉換；呼叫端不可直接製造。
+成功回傳來源頁面、content profile、校準端點、比例、最多 32 個有界 `object_candidates`、`selected_object_index`、矩形或自由折線外框、填色孔及線描圓候選、信心、可編輯 `feature_tree`、`proposed_spec` 與 validation。線描圓只有在 `accept_line_art_holes=true` 時才會進入 Feature Tree。矩形使用 `CadDocument 1.0 plate`，自由輪廓使用 `CadDocument 1.1 profile_extrusion`。`convertible=false` 表示外框、幾何或候選選取不足以安全轉換；呼叫端不可直接製造。
 
 ## `POST /image-feature-tree-to-spec`
 
@@ -241,12 +247,37 @@ Body 是完整 `CadDocument`。回傳：
 
 `error` 會阻止 renderer；`warning` 要求人工覆核；`info` 用於假設與螺紋近似資訊。
 
+## 製造圖與審核工作流
+
+### `POST /manufacturing-template`
+
+Body 包含已通過驗證的 `spec`，可選 `part_number`、`drawing_number` 與 `author`。回傳 `ManufacturingDrawingSpec 1.0` 草稿：由 CadDocument 解算整體與孔尺寸，提供一般／個別公差、A/B/C 基準、Ra、BOM、標題欄及 revision。標稱值不能由第二份任意數字覆寫。
+
+將此回傳值放入 `/generate-from-spec` 的 `drawing_spec`，並確保 `formats` 含 `pdf`，即可建立製造圖工作包。非同步 `/async/generate-from-spec` 也接受相同欄位。
+
+### `GET /jobs/{job_id}/manufacturing-review`
+
+取得最新 draft／in_review／approved／rejected 狀態、版本、append-only events、目前 drawing spec／PDF 檔名及 SHA-256 綁定。讀取時會重新驗證幾何、原始 drawing spec、draft PDF 與最新衍生檔；任何 tamper 回 `409`。
+
+### `POST /jobs/{job_id}/manufacturing-review/transitions`
+
+```json
+{
+  "action": "submit",
+  "expected_version": 0,
+  "reviewer": "owner",
+  "note": "Ready for review"
+}
+```
+
+合法流程是 `draft → in_review → approved|rejected`。舊 `expected_version`、直接核准草稿、空白退回註記、終態再修改、hash mismatch 或仍有效的跨程序 claim 都回 `409`／`422` 並 fail closed。每次成功轉換新增 drawing spec、可搜尋 PDF 與 review snapshot；不覆寫舊證據。操作者是自我聲明 metadata，不是電子簽章。
+
 ## 工作與下載
 
 - `GET /jobs`：列出最近工作。
 - `GET /jobs/{job_id}`：取得 manifest。
 - `GET /jobs/{job_id}/files/{filename}`：下載單一輸出。
-- `GET /jobs/{job_id}/bundle.zip`：下載工作目錄中的所有輸出。
+- `GET /jobs/{job_id}/bundle.zip`：只下載 manifest 白名單產物；製造工作另含經完整性驗證的 append-only spec／PDF／review snapshots，不包含 rogue 或 claim 檔。
 
 `job_id` 必須是系統產生的 32 位十六進位 ID；檔名只接受安全白名單字元，且解析後必須直接位於該工作目錄。
 

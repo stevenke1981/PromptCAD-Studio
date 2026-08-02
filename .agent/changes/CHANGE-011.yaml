@@ -1,0 +1,24 @@
+id: CHANGE-011
+type: feature
+risk: medium
+objective: Close the remaining Phase 3 source-type and multi-view ambiguity gaps without weakening human review.
+scope:
+  - Explicit photo, sketch, whiteboard, patent, scan, and automatic image content profiles
+  - Visible bounded object or view candidates with explicit selection
+  - Fail-closed default behavior for ambiguous multi-object or multi-view images
+  - Line-art circle recovery for outlined holes with duplicate suppression
+  - REST, CLI, and Web selection controls with source provenance
+  - Per-profile focused tests and an end-to-end reviewed CAD flow
+protected_behavior:
+  - Known real-world length and thickness remain explicit manufacturing inputs
+  - Raw uploaded bytes and filenames are not persisted
+  - Existing single-object PNG, JPEG, and PDF requests remain compatible
+  - Perspective correction remains explicit and rectangle-only
+  - All image-derived geometry remains review-required
+acceptance:
+  - Photo, sketch, whiteboard, patent, scan, and PDF fixtures expose their selected content profile
+  - Outlined sketch and whiteboard holes appear in the editable Feature Tree
+  - A patent-style multi-view image is blocked by default and exposes bounded candidates
+  - Selecting one candidate produces a reviewed, validated CadDocument and CAD artifacts
+  - Existing image, prompt, DXF, backend, queue, and manufacturing regressions pass
+status: accepted

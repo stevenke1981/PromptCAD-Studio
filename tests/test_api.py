@@ -23,6 +23,22 @@ def test_capabilities_advertise_rectangular_side_cutouts(client):
     assert "profile_extrusion" in response.json()["base_features"]
     assert "profile_revolution" in response.json()["base_features"]
     assert "1.2" in response.json()["schema_versions"]
+    assert response.json()["image_content_profiles"] == [
+        "auto",
+        "photo",
+        "sketch",
+        "whiteboard",
+        "patent",
+        "scan",
+    ]
+    assert response.json()["image_object_candidate_limit"] == 32
+    assert response.json()["manufacturing_drawing_schema_versions"] == ["1.0"]
+    assert response.json()["manufacturing_review_states"] == [
+        "draft",
+        "in_review",
+        "approved",
+        "rejected",
+    ]
     assert response.json()["dxf_entities"] == [
         "LINE",
         "ARC",

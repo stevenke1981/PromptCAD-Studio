@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.8.0 — 2026-08-01
+
+原始五階段完成封板與可製造工程圖工作包：
+
+- 圖片入口新增 `auto`、照片、手繪、白板、專利與掃描 content profile；API、CLI 與 Web 都可選擇 profile。
+- 多物件／專利多視圖會回傳最多 32 個有界候選，未指定 `object_index` 時 fail closed；選定候選後才建立 Feature Tree 與 CAD。
+- 線描草圖與反相白板可提出圓孔候選並合併同心粗線；候選含辨識來源與直徑不確定範圍，只有使用者明確接受後才會切入 CAD，避免把環形註記或數字 0 當成孔。
+- 專利雙視圖 REST／Web 實際通過「BLOCKED → 選候選 1 → REVIEW → CadQuery STEP/PDF」，Web 有 19 個下載入口且零 Console／page error。
+- 新增 `ManufacturingDrawingSpec 1.0`：由 CadDocument 解算尺寸標稱值，包含公差、基準、Ra、BOM、標題欄、revision 及明確上限。
+- 一般三視圖草稿保持相容；提供 drawing spec 時另產生可搜尋兩頁製造圖 PDF，並保留每次狀態的 append-only PDF/spec/review snapshot。
+- 新增 draft → in-review → approved／rejected 生命週期、`expected_version`、終態保護、退回註記、SHA-256 綁定與 bundle 白名單；操作者名稱明確標示為自我聲明而非電子簽章。
+- 製造轉換的跨程序 claim 使用有限 lease；中途斷電留下的過期 claim 與版本限定孤兒檔可復原，仍有效的 claim 不會被搶占。
+- REST、CLI、Web 與 async worker 均支援製造圖流程；Web 實際通過草稿 v0 → 送審 v1 → 核准 v2、重載持久化、21 個下載入口及零 Console／page error。
+- 226 項全專案測試、84% app 覆蓋率、Ruff、compileall、JavaScript syntax、24 個 YAML、CadQuery smoke 與獨立 code review 通過。
+- FreeCAD、Fusion 360、SOLIDWORKS 與 hardened Docker 的實際 host/runtime 驗收仍標示 `MANUAL_REQUIRED`，不以來源輸出冒充桌面執行。
+
 ## v0.7.0 — 2026-07-31
 
 第四階段進階 2D 工程圖推論：

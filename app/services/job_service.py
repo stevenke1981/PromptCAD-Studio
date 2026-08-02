@@ -12,7 +12,7 @@ import sys
 import tempfile
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -46,6 +46,8 @@ from app.services.validator import DesignValidator
 
 
 class JobService:
+    _MANUFACTURING_CLAIM_LEASE_SECONDS = 300
+
     def __init__(self, settings: Settings):
         self.settings = settings
         self.planners = PlannerFactory(settings)
@@ -182,6 +184,9 @@ class JobService:
         thickness_mm: float,
         perspective_correction: bool = False,
         page_index: int = 0,
+        content_profile: str = "auto",
+        object_index: int | None = None,
+        accept_line_art_holes: bool = False,
     ):
         if len(data) > self.settings.max_image_bytes:
             raise ValueError(f"Image exceeds the {self.settings.max_image_bytes} byte limit")
@@ -192,6 +197,9 @@ class JobService:
             thickness_mm=thickness_mm,
             perspective_correction=perspective_correction,
             page_index=page_index,
+            content_profile=content_profile,
+            object_index=object_index,
+            accept_line_art_holes=accept_line_art_holes,
         )
 
     async def analyze_upload(
@@ -202,6 +210,9 @@ class JobService:
         thickness_mm: float,
         perspective_correction: bool = False,
         page_index: int = 0,
+        content_profile: str = "auto",
+        object_index: int | None = None,
+        accept_line_art_holes: bool = False,
     ) -> ImageAnalysisResponse:
         await self._image_slots.acquire()
         try:
@@ -219,6 +230,9 @@ class JobService:
             thickness_mm=thickness_mm,
             perspective_correction=perspective_correction,
             page_index=page_index,
+            content_profile=content_profile,
+            object_index=object_index,
+            accept_line_art_holes=accept_line_art_holes,
         )
 
     async def _analyze_admitted(
@@ -229,6 +243,9 @@ class JobService:
         thickness_mm: float,
         perspective_correction: bool,
         page_index: int,
+        content_profile: str,
+        object_index: int | None,
+        accept_line_art_holes: bool,
     ) -> ImageAnalysisResponse:
         loop = asyncio.get_running_loop()
         try:
@@ -241,6 +258,9 @@ class JobService:
                     thickness_mm=thickness_mm,
                     perspective_correction=perspective_correction,
                     page_index=page_index,
+                    content_profile=content_profile,
+                    object_index=object_index,
+                    accept_line_art_holes=accept_line_art_holes,
                 ),
             )
         except BaseException:
@@ -899,8 +919,9 @@ class JobService:
         job_id: str,
         request: ReviewTransitionRequest,
     ) -> ManufacturingReviewResponse:
+        job_dir = self.storage.path(job_id)
         lock = self._manufacturing_lock(job_id)
-        with lock:
+        with lock, self._manufacturing_process_lock(job_dir):
             current = self.get_manufacturing_review(job_id)
             if request.expected_version != current.version:
                 raise RuntimeError(
@@ -916,39 +937,24 @@ class JobService:
                 raise ValueError("A rejection requires a non-empty review note")
 
             next_version = current.version + 1
-            claim_path = (
-                self.storage.path(job_id)
-                / f"manufacturing-review-v{next_version:03d}.claim"
+            claim_path, claim_id = self._acquire_manufacturing_claim(
+                job_dir,
+                next_version,
+                request,
             )
             try:
-                self.storage.write_bytes(
-                    claim_path,
-                    json.dumps(
-                        request.model_dump(mode="json"),
-                        ensure_ascii=False,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ).encode("utf-8"),
-                    overwrite=False,
-                )
-            except FileExistsError as exc:
-                raise RuntimeError(
-                    "Manufacturing review version is already being transitioned"
-                ) from exc
-
-            job_dir = self.storage.path(job_id)
-            manifest = self.get(job_id)
-            if manifest is None:
-                raise FileNotFoundError("Job not found")
-            current_spec_path = job_dir / current.drawing_spec_filename
-            try:
-                drawing_spec = ManufacturingDrawingSpec.model_validate_json(
-                    current_spec_path.read_text(encoding="utf-8")
-                )
-            except (OSError, ValueError) as exc:
-                raise RuntimeError("Current manufacturing drawing spec is invalid") from exc
-            completed = False
-            try:
+                manifest = self.get(job_id)
+                if manifest is None:
+                    raise FileNotFoundError("Job not found")
+                current_spec_path = job_dir / current.drawing_spec_filename
+                try:
+                    drawing_spec = ManufacturingDrawingSpec.model_validate_json(
+                        current_spec_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, ValueError) as exc:
+                    raise RuntimeError(
+                        "Current manufacturing drawing spec is invalid"
+                    ) from exc
                 updated = self.manufacturing.transition(drawing_spec, request)
                 self.manufacturing.validate_against_cad(manifest.spec, updated)
                 updated_version = updated.review_version
@@ -1013,11 +1019,98 @@ class JobService:
                     snapshot_path,
                     response.model_dump(mode="json"),
                 )
-                completed = True
                 return response
             finally:
-                if not completed:
-                    claim_path.unlink(missing_ok=True)
+                self._release_manufacturing_claim(claim_path, claim_id)
+
+    def _acquire_manufacturing_claim(
+        self,
+        job_dir: Path,
+        next_version: int,
+        request: ReviewTransitionRequest,
+    ) -> tuple[Path, str]:
+        claim_path = job_dir / f"manufacturing-review-v{next_version:03d}.claim"
+        snapshot_path = job_dir / f"manufacturing-review-v{next_version:03d}.json"
+        claim_id = secrets.token_hex(16)
+        now = datetime.now(UTC)
+        payload = {
+            "claim_id": claim_id,
+            "created_at": now.isoformat(),
+            "lease_expires_at": (
+                now.timestamp() + self._MANUFACTURING_CLAIM_LEASE_SECONDS
+            ),
+            "request": request.model_dump(mode="json"),
+        }
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+        for attempt in range(2):
+            try:
+                self.storage.write_bytes(claim_path, encoded, overwrite=False)
+                return claim_path, claim_id
+            except FileExistsError as exc:
+                if snapshot_path.is_file():
+                    raise RuntimeError(
+                        "Manufacturing review version was already transitioned"
+                    ) from exc
+                try:
+                    existing_bytes = claim_path.read_bytes()
+                    existing = json.loads(existing_bytes)
+                    lease_expires_at = float(existing["lease_expires_at"])
+                except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+                    try:
+                        lease_expires_at = (
+                            claim_path.stat().st_mtime
+                            + self._MANUFACTURING_CLAIM_LEASE_SECONDS
+                        )
+                    except OSError:
+                        lease_expires_at = now.timestamp() + 1
+                    existing_bytes = b""
+
+                if datetime.now(UTC).timestamp() < lease_expires_at:
+                    raise RuntimeError(
+                        "Manufacturing review version is already being transitioned"
+                    ) from exc
+                if attempt:
+                    raise RuntimeError(
+                        "Manufacturing review version recovery was contested"
+                    ) from exc
+
+                # The state snapshot is the commit record. With no snapshot and
+                # an expired claim, version-scoped derivatives are interrupted
+                # transaction debris and may be removed before a single retry.
+                if existing_bytes:
+                    try:
+                        if claim_path.read_bytes() != existing_bytes:
+                            raise RuntimeError(
+                                "Manufacturing review claim changed during recovery"
+                            )
+                    except OSError as read_exc:
+                        raise RuntimeError(
+                            "Manufacturing review claim could not be recovered"
+                        ) from read_exc
+                for pattern in (
+                    f"drawing-review-v{next_version:03d}-*.pdf",
+                    f"drawing-spec-review-v{next_version:03d}-*.json",
+                ):
+                    for orphan in job_dir.glob(pattern):
+                        orphan.unlink(missing_ok=True)
+                claim_path.unlink(missing_ok=True)
+
+        raise RuntimeError("Manufacturing review claim could not be acquired")
+
+    @staticmethod
+    def _release_manufacturing_claim(claim_path: Path, claim_id: str) -> None:
+        try:
+            payload = json.loads(claim_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError):
+            return
+        if payload.get("claim_id") == claim_id:
+            claim_path.unlink(missing_ok=True)
 
     def _verify_manufacturing_review(
         self,
@@ -1108,6 +1201,37 @@ class JobService:
     def _manufacturing_lock(self, job_id: str) -> threading.Lock:
         with self._manufacturing_locks_guard:
             return self._manufacturing_locks.setdefault(job_id, threading.Lock())
+
+    @staticmethod
+    @contextmanager
+    def _manufacturing_process_lock(job_dir: Path):
+        """Serialize review transitions across processes for one persisted job."""
+
+        lock_path = job_dir / ".manufacturing-review.lock"
+        with lock_path.open("a+b") as handle:
+            handle.seek(0, os.SEEK_END)
+            if handle.tell() == 0:
+                handle.write(b"0")
+                handle.flush()
+                os.fsync(handle.fileno())
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                try:
+                    yield
+                finally:
+                    handle.seek(0)
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def _require_new_artifacts(*paths: Path) -> None:

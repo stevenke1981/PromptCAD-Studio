@@ -103,6 +103,9 @@ def _image(args) -> int:
                 thickness_mm=args.thickness,
                 perspective_correction=args.perspective_correction,
                 page_index=args.page,
+                content_profile=args.content_profile,
+                object_index=args.object_index,
+                accept_line_art_holes=args.accept_line_art_holes,
             )
         )
     except (ImageAnalysisError, ValueError, RuntimeError) as exc:
@@ -587,6 +590,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--perspective-correction",
         action="store_true",
         help="Rectify one convex four-corner plate before extracting geometry",
+    )
+    image.add_argument(
+        "--content-profile",
+        choices=["auto", "photo", "sketch", "whiteboard", "patent", "scan"],
+        default="auto",
+        help="Preprocessing profile for the supplied photo, sketch, whiteboard, patent, or scan",
+    )
+    image.add_argument(
+        "--object-index",
+        type=int,
+        help="Explicitly select one bounded object/view candidate by zero-based index",
+    )
+    image.add_argument(
+        "--accept-line-art-holes",
+        action="store_true",
+        help="Explicitly accept ambiguous outlined-circle candidates as CAD through-holes",
     )
     image.add_argument(
         "--formats",

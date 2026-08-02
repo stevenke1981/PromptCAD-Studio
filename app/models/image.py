@@ -6,6 +6,8 @@ from pydantic import Field
 
 from app.models.cad import CadDocument, StrictModel, ValidationReport
 
+ContentProfile = Literal["auto", "photo", "sketch", "whiteboard", "patent", "scan"]
+
 
 class PixelPoint(StrictModel):
     x: float = Field(ge=0)
@@ -42,7 +44,18 @@ class DetectedCircle(StrictModel):
     center_px: PixelPoint
     center_mm: MetricPoint
     diameter_mm: float = Field(gt=0)
+    diameter_min_mm: float = Field(gt=0)
+    diameter_max_mm: float = Field(gt=0)
     circularity: float = Field(ge=0, le=1)
+    confidence: float = Field(ge=0, le=1)
+    extraction_method: Literal["contour_void", "line_art_candidate"]
+    accepted_for_cad: bool
+
+
+class DetectedObjectCandidate(StrictModel):
+    index: int = Field(ge=0, le=31)
+    bounds_px: list[int] = Field(min_length=4, max_length=4)
+    area_ratio: float = Field(gt=0, le=1)
     confidence: float = Field(ge=0, le=1)
 
 
@@ -69,6 +82,7 @@ class ImageAnalysisResponse(StrictModel):
     image_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     analysis_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     image_format: Literal["PNG", "JPEG", "PDF"]
+    content_profile: ContentProfile = "auto"
     source_kind: Literal["image", "pdf"] = "image"
     source_page_index: int | None = Field(default=None, ge=0, le=99)
     source_page_count: int | None = Field(default=None, ge=1, le=100)
@@ -77,6 +91,12 @@ class ImageAnalysisResponse(StrictModel):
     image_width_px: int = Field(gt=0)
     image_height_px: int = Field(gt=0)
     calibration: ImageCalibration
+    object_candidates: list[DetectedObjectCandidate] = Field(
+        default_factory=list,
+        max_length=32,
+    )
+    selected_object_index: int | None = Field(default=None, ge=0, le=31)
+    ambiguous_objects: bool = False
     outer_profile: DetectedOuterProfile
     circles: list[DetectedCircle] = Field(default_factory=list, max_length=64)
     feature_tree: list[FeatureTreeNode] = Field(default_factory=list, max_length=130)

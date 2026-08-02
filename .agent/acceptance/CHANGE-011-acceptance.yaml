@@ -1,0 +1,26 @@
+change_id: CHANGE-011
+status: passed
+accepted_at: 2026-08-01
+build_or_launch: PASS
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  - Photo, sketch, whiteboard, patent, scan, auto, PNG, JPEG, and selected PDF focused tests passed
+  - Sketch and inverted whiteboard fixtures each recovered two outlined circular candidates and only cut them after explicit acceptance
+  - Noisy scan fixture recovered one bounded part and one hole
+  - Patent-style two-view input returned two visible candidates and failed closed without selection
+  - Explicit object_index 1 produced a validated reviewed CadDocument and real CadQuery STEP plus PDF
+  - Web showed BLOCKED for ambiguous views, then REVIEW after candidate 1 selection, then completed CadQuery output with 19 downloads
+  - Web acceptance completed with zero console errors and zero page errors
+  - Web lists each circle candidate with extraction method, center, nominal diameter, uncertainty range, and CAD acceptance state
+  - Screenshot .agent/acceptance/CHANGE-011-web.png
+safety:
+  - Known real-world length and thickness remain explicit inputs
+  - Multi-object and multi-view ambiguity never silently chooses manufacturing geometry
+  - Raw source bytes and untrusted filenames remain excluded from job artifacts
+  - outlined-circle candidates expose provenance and diameter uncertainty and remain excluded until explicitly accepted
+limitations:
+  - Occluded or reflective parts, arbitrary analytic arcs, scale OCR, and automatic thickness inference remain review or future-tool concerns

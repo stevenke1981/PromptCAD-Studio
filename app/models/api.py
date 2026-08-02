@@ -236,6 +236,10 @@ class CapabilityResponse(StrictApiModel):
     openscad_available: bool
     image_analysis_available: bool = True
     image_formats: list[str] = Field(default_factory=lambda: ["png", "jpeg", "pdf"])
+    image_content_profiles: list[str] = Field(
+        default_factory=lambda: ["auto", "photo", "sketch", "whiteboard", "patent", "scan"]
+    )
+    image_object_candidate_limit: int = 32
     dxf_analysis_available: bool = True
     dxf_entities: list[str] = Field(
         default_factory=lambda: ["LINE", "ARC", "CIRCLE", "LWPOLYLINE", "POLYLINE"]
@@ -248,3 +252,8 @@ class CapabilityResponse(StrictApiModel):
     planner_capabilities: list[PlannerCapability] = Field(default_factory=list)
     async_queue_available: bool = True
     async_job_kinds: list[QueueJobKind] = Field(default_factory=lambda: ["prompt", "spec"])
+    manufacturing_drawing_available: bool = True
+    manufacturing_drawing_schema_versions: list[str] = Field(default_factory=lambda: ["1.0"])
+    manufacturing_review_states: list[str] = Field(
+        default_factory=lambda: ["draft", "in_review", "approved", "rejected"]
+    )

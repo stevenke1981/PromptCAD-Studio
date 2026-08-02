@@ -19,4 +19,4 @@ acceptance:
   - submit then approve produces additive review PDFs and persists across service restart
   - invalid references, stale versions, hash tampering, illegal transitions, and terminal-state changes fail closed
   - REST, CLI, and Web can complete the same review workflow
-status: in_progress
+status: accepted

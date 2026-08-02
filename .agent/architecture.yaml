@@ -1,9 +1,9 @@
-updated_at: 2026-07-31
-version: 0.7.0
+updated_at: 2026-08-01
+version: 0.8.0
 architecture:
   input_paths:
     - prompt via REST, CLI, or Web
-    - calibrated PNG/JPEG or selected PDF page via reviewed image Feature Tree
+    - calibrated photo, sketch, whiteboard, patent, scan, PNG/JPEG, or selected PDF page via reviewed image Feature Tree
     - restricted DXF via reviewed DXF Feature Tree
     - manually edited CadDocument 1.0, 1.1, or 1.2
   planning:
@@ -100,12 +100,16 @@ architecture:
     - path, symlink, and output signature verification before atomic promotion
   image_ingestion:
     formats: [PNG, JPEG, PDF]
+    content_profiles: [auto, photo, sketch, whiteboard, patent, scan]
     pdf_runtime: pypdfium2 with serialized native access
     controls:
       - compressed byte, page count, dimension, and decoded pixel limits
       - zero-based explicit page selection
       - optional four-corner perspective correction for rectangular plates
       - ambiguous uncorrected convex quadrilaterals fail closed
+      - bounded object and view candidates are visible and require explicit object_index when ambiguous
+      - line-art contours produce provenance-tagged candidates with diameter uncertainty and duplicate suppression
+      - outlined-circle candidates never enter CAD until explicitly accepted because annotations can resemble holes
       - arbitrary closed polygon profiles compile to CadDocument 1.1
       - source bytes and untrusted filenames are never persisted as job artifacts
   dxf_ingestion:
@@ -135,6 +139,19 @@ architecture:
       worker_network: none
       root_filesystem: read_only
       controls: [cap_drop_all, no_new_privileges, cpu, memory, pids]
+  manufacturing_package:
+    geometry_contract: immutable CadDocument hash
+    drawing_contract: ManufacturingDrawingSpec 1.0
+    schedules: [dimensions, tolerances, datums, surface_finish, bom, title_block, revisions]
+    lifecycle: [draft, in_review, approved, rejected]
+    persistence:
+      - original geometry, drawing spec, and draft PDF are SHA-256 bound
+      - each transition appends a new drawing spec, searchable PDF, and review snapshot
+      - expected_version prevents stale updates and approved or rejected states are terminal
+      - filesystem claim provides cross-process exclusion with a bounded recovery lease
+      - state snapshot is the transaction commit record and expired partial derivatives are recoverable
+    clients: [REST, CLI, Web, async_worker]
+    assurance: reviewer identity is self-asserted workflow metadata, not a legal or cryptographic signature
   public_deployment_boundary:
     required:
       - isolated renderer worker
@@ -145,7 +162,9 @@ architecture:
       - authentication, TLS, rate limits, tenant quotas, and retention policy
     current_status: single-host hardened worker profile implemented; production multi-tenant policy remains deployment-owned
 accepted_evidence:
-  - 180 pytest tests passed with Phase 4 revolution, pattern, and finishing inference
+  - 219 pytest tests passed with 84 percent app coverage across all accepted stages
+  - Patent multi-view Web flow required explicit selection and emitted real CadQuery output with zero console errors
+  - Manufacturing Web flow persisted draft, submit, and approval states with zero console errors
   - CadQuery emitted and read back a valid profile-revolution STEP
   - CadQuery, Build123d, FreeCAD, and OpenSCAD revolution sources passed focused tests
   - 153 pytest tests passed across Phase 1 through Phase 6 with 81 percent app coverage

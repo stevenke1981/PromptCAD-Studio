@@ -221,6 +221,12 @@ async def image_analysis(
     thickness_mm: Annotated[float, Form(gt=0, le=100_000)],
     perspective_correction: Annotated[bool, Form()] = False,
     page_index: Annotated[int, Form(ge=0, le=99)] = 0,
+    content_profile: Annotated[
+        Literal["auto", "photo", "sketch", "whiteboard", "patent", "scan"],
+        Form(),
+    ] = "auto",
+    object_index: Annotated[int | None, Form(ge=0, le=31)] = None,
+    accept_line_art_holes: Annotated[bool, Form()] = False,
 ):
     service = _service(request)
     try:
@@ -230,6 +236,9 @@ async def image_analysis(
             thickness_mm=thickness_mm,
             perspective_correction=perspective_correction,
             page_index=page_index,
+            content_profile=content_profile,
+            object_index=object_index,
+            accept_line_art_holes=accept_line_art_holes,
         )
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

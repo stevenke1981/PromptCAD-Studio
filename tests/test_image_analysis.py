@@ -64,6 +64,18 @@ def multipage_plate_pdf() -> bytes:
     return buffer.getvalue()
 
 
+def patent_multiview_png() -> bytes:
+    image = Image.new("L", (1000, 700), 255)
+    draw = ImageDraw.Draw(image)
+    draw.text((80, 45), "FIG. 1", fill=0)
+    draw.rectangle((60, 100, 450, 430), outline=0, width=6)
+    draw.text((600, 45), "FIG. 2", fill=0)
+    draw.rectangle((560, 100, 940, 430), outline=0, width=6)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 @pytest.fixture
 def extractor():
     return ImageFeatureExtractor(
@@ -322,6 +334,53 @@ def test_pdf_upload_api_accepts_page_selection(client):
     assert body["source_kind"] == "pdf"
     assert body["source_page_index"] == 0
     assert body["source_page_count"] == 2
+
+
+def test_patent_api_exposes_ambiguous_views_and_accepts_explicit_selection(client):
+    request = {
+        "files": {"image": ("patent.png", patent_multiview_png(), "image/png")},
+        "data": {
+            "known_length_mm": "100",
+            "thickness_mm": "5",
+            "content_profile": "patent",
+        },
+    }
+    blocked = client.post("/api/v1/image-analysis", **request)
+
+    assert blocked.status_code == 200, blocked.text
+    blocked_body = blocked.json()
+    assert blocked_body["content_profile"] == "patent"
+    assert blocked_body["ambiguous_objects"] is True
+    assert blocked_body["convertible"] is False
+    assert len(blocked_body["object_candidates"]) == 2
+
+    request["data"]["object_index"] = "1"
+    selected = client.post("/api/v1/image-analysis", **request)
+
+    assert selected.status_code == 200, selected.text
+    selected_body = selected.json()
+    assert selected_body["selected_object_index"] == 1
+    assert selected_body["convertible"] is True
+    assert selected_body["proposed_spec"]["planner"]["review_required"] is True
+
+    generated = client.post(
+        "/api/v1/generate-from-image-feature-tree",
+        json={
+            "analysis": selected_body,
+            "feature_tree": selected_body["feature_tree"],
+            "formats": ["step", "pdf", "json"],
+            "render": True,
+            "backend": "cadquery",
+        },
+    )
+
+    assert generated.status_code == 200, generated.text
+    manifest = generated.json()
+    assert manifest["status"] == "completed"
+    assert manifest["planner_used"] == "image-feature-tree"
+    assert {"model.step", "drawing.pdf", "image-analysis.json", "feature-tree.json"} <= {
+        artifact["filename"] for artifact in manifest["artifacts"]
+    }
 
 
 def test_duplicate_free_profile_points_are_rejected(extractor):

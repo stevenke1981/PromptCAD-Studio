@@ -1,0 +1,34 @@
+id: ALL-PHASES-20260801
+status: passed
+scope: Original PromptCAD phases 1 through 5 plus the accepted queue and manufacturing extensions
+requirements:
+  phase_1_prompt_to_cad_mvp:
+    status: PASS
+    evidence: Chinese mounting-block prompt produced validated DSL and real STEP, STL, DXF, SVG, PDF, Python, SCAD, and JSON outputs
+  phase_2_cad_agent:
+    status: PASS
+    evidence: NEMA17 prompt applied versioned 42.3 mm face, 31 mm pitch, four M3 holes, center pilot, shaft clearance, provenance, overrides, and real CAD output
+  phase_3_image_to_cad:
+    status: PASS
+    evidence: Explicit photo, sketch, whiteboard, patent, scan, and auto profiles support bounded candidates, provenance-tagged outlined-hole candidates that require acceptance, calibrated dimensions, editable Feature Tree, review, and real STEP/PDF output
+  phase_4_2d_drawing_to_3d:
+    status: PASS
+    evidence: Bounded DXF supports symmetry analysis, extrusion, CENTER-axis revolution, linear and circular hole arrays, conservative fillet or chamfer inference, editable Feature Tree, and real STEP output
+  phase_5_planner_dsl_compilers:
+    status: PASS
+    evidence: Prompt, image, and DXF feed planners then typed CAD DSL, validation, a closed backend contract, and deterministic CadQuery, Build123d, FreeCAD, OpenSCAD, Fusion 360, and SOLIDWORKS sources or host adapters
+  async_worker_extension:
+    status: PASS
+    evidence: Durable queue, independent worker, lease, heartbeat, retry, cancellation, reload recovery, CLI, REST, and Web flows are protected by regression tests
+  manufacturing_extension:
+    status: PASS
+    evidence: Typed dimensions, tolerances, datums, surface finish, BOM, title block, revision, searchable PDF, hash binding, and draft to approval workflow passed API, CLI, Web, persistence, and crash-recovery acceptance
+verification:
+  - 226 pytest tests passed
+  - app coverage 84 percent
+  - Ruff, compileall, JavaScript syntax, 24 YAML files, uv lock check, and CadQuery smoke generation passed
+  - Independent code review passed after cross-process claim locking and visible line-art candidate review were added
+manual_runtime_boundaries:
+  - FreeCAD source requires a FreeCAD host for runtime execution
+  - Fusion 360 and SOLIDWORKS adapters require licensed desktop hosts
+  - Docker hardened profile requires a Docker host

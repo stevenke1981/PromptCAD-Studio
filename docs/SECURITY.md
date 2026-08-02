@@ -79,13 +79,20 @@
 - 依租戶隔離資料與下載授權。
 - 依賴與容器漏洞掃描、鎖版及 SBOM。
 
+## 製造圖完整性邊界
+
+- `ManufacturingDrawingSpec` 綁定 canonical CadDocument SHA-256；原始 drawing spec、draft PDF、目前 spec/PDF 與每版 review snapshot 讀取時重新驗證。
+- 狀態轉換以 `expected_version`、per-job lock 及跨程序 create-once claim 序列化。claim 有 300 秒 lease；只有沒有 commit snapshot 的過期版本才會清除該版本限定孤兒檔後重試。
+- ZIP 只包含 manifest 及通過完整性驗證的製造歷程，不掃描工作目錄，不包含 rogue、暫存或 claim 檔。
+- Reviewer 名稱是自我聲明 metadata；產品不將它表示成身分證明、法律電子簽章或 PKI 簽章。
+
 ## 尚未完成
 
 - 每工作獨立 sandbox、客製 seccomp／AppArmor policy 與租戶級 cgroup 配額；目前為服務級 hardened container。
 - 多租戶帳號、細粒度授權、審計資料庫與速率限制。
 - CAD kernel 惡意／退化 BREP fuzzing。
 - 多節點外部 queue、租戶公平排程、dead-letter queue 與 retention／garbage collection。
-- 正式工程圖、公差與製造簽核流程。
+- 完整 ASME Y14.5／ISO GPS、PKI-backed 簽章、供應商身分與正式審計資料庫。
 - FreeCAD host runtime 尚未實際執行；Fusion 360／SOLIDWORKS host adapters 也尚未在授權桌面環境做端到端驗收。
 
 ## 安全回報

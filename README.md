@@ -16,13 +16,13 @@ DXF
   → STEP、STL、DXF、SVG、工程圖 PDF、Python、SCAD、JSON
 ```
 
-目前版本 v0.7.0 是可直接執行的 CAD Agent 平台，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼，也可將校準圖片、草圖、指定 PDF 頁面或受限 DXF 轉成可編輯 Feature Tree。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
+目前版本 v0.8.0 是已完成原始五階段垂直流程的 CAD Agent 平台，適合固定板、法蘭／墊圈、圓柱、L 型支架與開口外殼，也可將照片、手繪、白板、專利圖、掃描圖、指定 PDF 頁面或受限 DXF 轉成可編輯 Feature Tree。系統不會直接執行模型產生的 Python；LLM 只能填寫有型別、尺寸上限與特徵白名單的 CAD DSL，再由伺服器擁有的確定性編譯器建立幾何來源。
 
 ## 已包含
 
 - 中文／英文提示詞本地解析，沒有 API Key 也能使用。
 - 標準件 CAD Agent：辨識 NEMA17 並帶入有來源、可覆寫的馬達面尺寸與支架參數。
-- 校準圖片／PDF 轉 CAD：PNG/JPEG 或指定 PDF 頁面可擷取矩形、任意閉合折線輪廓與圓孔；矩形照片可明確啟用四點透視校正，並產生信心分數、可編輯 Feature Tree、CAD DSL 與完整工程輸出。
+- 圖片／PDF 轉 CAD：`auto`、照片、手繪、白板、專利圖與掃描 profile 可擷取矩形、任意閉合折線輪廓及填色孔；線描圓只提出含來源與直徑範圍的候選，明確接受後才切孔。多物件或多視圖會列出候選並 fail closed，明確選取後才產生可編輯 Feature Tree、CAD DSL 與完整工程輸出。
 - 受限 DXF 工程圖轉 3D：閉合 LINE／ARC／LWPOLYLINE／2D POLYLINE 外框、CIRCLE 圓孔、CENTER 旋轉軸、線性／圓周孔陣列及一致四角圓角／倒角，經人工確認後拉伸或旋轉成完整 CAD 輸出。
 - OpenAI-compatible LLM 規劃器，支援 `json_schema`、`json_object` 與純提示 JSON 模式。
 - 可編輯 `spec.json`：在 Web UI 修改尺寸後重新驗證與輸出。
@@ -44,6 +44,7 @@ DXF
 - `auto` 只會執行 CadQuery → OpenSCAD → source-only；Build123d 必須明確選擇，FreeCAD／Fusion 360／SOLIDWORKS 永不由伺服器自動執行。選擇 Fusion 360／SOLIDWORKS 且 `render=true` 時，工作包會以可用的 exact 本機核心附帶已驗證的中性 STEP。
 - Web UI、REST API、CLI、Docker Compose、Conda 環境、測試、CI 與完整範例。
 - 每次工作保存 manifest、DSL、驗證報告、六種後端來源、能力報告、預覽及實際輸出。
+- 可製造工程圖工作包：`ManufacturingDrawingSpec 1.0` 提供尺寸、公差、基準、Ra、BOM、標題欄與 revision；可搜尋 PDF、SHA-256 綁定及 draft → in-review → approved／rejected 歷程可由 REST、CLI、Web 與背景 worker 操作。
 
 ## 最快啟動：Docker
 
@@ -159,6 +160,12 @@ CLI：
 promptcad image examples/image-to-cad/plate-top-view.png `
   --known-length 100 --thickness 5 `
   --analysis-output examples/generated/image-to-cad/image-analysis.json
+
+# 專利圖或多視圖先列出候選，再明確選擇其中一個視圖
+promptcad image patent.png --known-length 100 --thickness 5 `
+  --content-profile patent --analysis-output patent-analysis.json
+promptcad image patent.png --known-length 100 --thickness 5 `
+  --content-profile patent --object-index 1 --confirm
 
 # PDF 頁碼採零起算；矩形照片只有明確指定時才做透視校正
 promptcad image drawing.pdf --page 0 `
@@ -350,6 +357,9 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 | `backend-report.json` | 合約版本、能力快照、來源 SHA-256、spec hash、診斷與 fallback chain |
 | `preview.svg` | 不依賴 CAD 核心的快速工程預覽 |
 | `drawing.pdf` | A4 橫式三視圖工程草圖，不依賴 CAD 核心 |
+| `drawing-spec.json` | 與 CadDocument 雜湊綁定的製造尺寸、公差、基準、Ra、BOM、標題欄與 revision |
+| `manufacturing-review-vNNN.json` | Append-only 製造圖送審／核准／退回狀態與自我聲明操作者紀錄 |
+| `drawing-review-vNNN-*.pdf` | 每次狀態轉換新增的可搜尋製造圖 PDF，不覆寫舊版 |
 | `model.step` | 實體 CAD 交換檔，需要 CadQuery |
 | `model.stl` | 3D 列印網格，需要 CadQuery 或 OpenSCAD |
 | `model.dxf` | 水平截面 2D DXF，需要 CadQuery |
@@ -359,11 +369,11 @@ Create a 100x60x10 mm plate with two 5 mm blind holes 6 mm deep.
 ## 重要限制
 
 1. **M6、M8 等標示不等於完整實體螺紋。** 目前建立攻牙底孔／間隙孔的圓柱幾何，螺紋規格保留在 DSL 與驗證資訊中。
-2. DXF 是零件水平截面；`drawing.pdf` 是含外形尺寸與標題欄的三視圖草圖，尚不含完整公差、基準、表面處理與製造註記。
+2. DXF 是零件水平截面；一般 `drawing.pdf` 仍是三視圖草圖。提供 `ManufacturingDrawingSpec` 時會另產生有尺寸、公差、基準、Ra、BOM、revision 與審核狀態的製造圖，但不宣稱完整 ASME Y14.5／ISO GPS。
 3. 規則解析器偏向常見單一零件、單一孔群與單一矩形側面開口；複雜多段輪廓、多孔群、裝配與自由曲面應使用 LLM 規劃器或直接編輯 DSL。
 4. `preview.svg` 是快速預覽，不是 CAD kernel 的 BREP 渲染結果。
 5. AI 推論與預設值都會要求 review；投入 CNC、雷切、射出或承載用途前，必須由合格工程人員覆核材料、公差、強度與製程。
-6. 圖片流程支援校準後的高對比矩形、自由閉合折線、圓孔、指定 PDF 頁面與明確啟用的矩形透視校正；厚度仍必須輸入。反光、遮擋、多零件、無比例或線／圓弧輪廓仍需人工處理。
+6. 圖片流程支援照片、手繪、白板、專利、掃描與 PDF profile、自由閉合折線、填色孔、需明確接受的線描圓候選、多物件候選及明確矩形透視校正；已知長度與厚度仍必須輸入。遮擋、嚴重反光、比例尺 OCR、任意解析圓弧與自動厚度仍需人工處理。
 7. DXF 垂直切片支援 modelspace 中一個閉合 2D 外框的拉伸或 CENTER 半剖面旋轉、Z 軸圓孔與規則孔陣列；只會把可忠實還原的全域一致四角圓角／倒角轉成完成特徵。側向孔、工程圖 PDF、多視圖配對、尺寸註記與局部完成特徵仍屬後續工作。過大而無法在安全取樣上限內維持 0.5 mm 弦長精度的圓弧會停止轉換。
 8. FreeCAD 來源已通過語法、確定性與 conformance 測試，但本機尚未在 FreeCAD host runtime 實際執行；不得把 source export 解讀為 host runtime 驗收。
 9. Fusion 360／SOLIDWORKS 沒有伺服器端執行能力，也沒有授權桌面主程式的端到端驗收；adapter 只處理同工作包的中性 STEP。
@@ -379,7 +389,7 @@ node --check app/static/app.js
 uv run python scripts/smoke_test.py
 ```
 
-目前 180 項測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、圖片／多頁 PDF 安全解碼與校準、透視校正、自由輪廓、DXF 格式／單位／2D／複雜度防線、CENTER 旋轉、孔陣列、圓角／倒角推論、四種旋轉來源編譯、Feature Tree 編輯、驗證閘門、API Token、檔案下載與 ZIP、六後端 conformance，以及 queue 原子 claim、lease 復原、損壞 payload、取消競態、程序樹終止、REST／CLI／Worker 背景流程。
+目前 226 項測試涵蓋規則解析、NEMA17 Agent、M 制孔徑、盲孔、沉頭孔、矩形側面開口、X/Y/Z 軸幾何原始碼、六種圖片 profile、多物件／多視圖 fail-closed、需明確接受的線描孔候選、PDF 安全解碼與校準、透視校正、自由輪廓、DXF 格式／單位／2D／複雜度防線、CENTER 旋轉、孔陣列、圓角／倒角推論、四種旋轉來源編譯、Feature Tree 編輯、驗證閘門、六後端 conformance、durable queue，以及製造圖雜湊綁定、跨程序簽核併發與中斷交易復原。
 
 Build123d 已在獨立環境實際驗收：有效的 80×40×5 mm STEP，包含兩個半徑 3.3 mm 的圓柱孔面。CadQuery 與 Build123d 的 OCP 相依衝突，因此此結果來自分離的 venv。
 

@@ -23,6 +23,9 @@ const knownLengthEl = $('#known-length');
 const imageThicknessEl = $('#image-thickness');
 const imagePageEl = $('#image-page');
 const perspectiveCorrectionEl = $('#perspective-correction');
+const imageContentProfileEl = $('#image-content-profile');
+const imageObjectIndexEl = $('#image-object-index');
+const acceptLineArtHolesEl = $('#accept-line-art-holes');
 const featureTreePanel = $('#feature-tree-panel');
 const featureTreeEl = $('#feature-tree');
 const generateFeatureTreeBtn = $('#generate-feature-tree');
@@ -329,12 +332,23 @@ function showImageAnalysis(data) {
   activeDxfAnalysis = null;
   activeFeatureSource = 'image';
   featureTreePanel.hidden = false;
-  featureTreeSummary.textContent = '影像特徵樹';
+  const candidateLabel = data.object_candidates?.length
+    ? ` · ${data.object_candidates.length} 個物件／視圖候選${data.selected_object_index === null ? '（請選擇）' : ` · 已選 ${data.selected_object_index}`}`
+    : '';
+  featureTreeSummary.textContent = `影像特徵樹 · ${data.content_profile || 'auto'}${candidateLabel}`;
   setBadge(data.convertible ? 'REVIEW' : 'BLOCKED', data.convertible ? 'warn' : 'fail');
 
   warningsEl.innerHTML = '';
   const messages = [
     ...data.warnings,
+    ...(data.object_candidates || []).map((candidate) => (
+      `候選 ${candidate.index}：範圍 ${candidate.bounds_px.join(' × ')}，信心 ${Math.round(candidate.confidence * 100)}%`
+    )),
+    ...(data.circles || []).map((circle) => {
+      const method = circle.extraction_method === 'contour_void' ? '填色孔輪廓' : '線描圓候選';
+      const state = circle.accepted_for_cad ? '已納入 CAD' : '未納入 CAD';
+      return `${circle.id}：${method}，中心 (${circle.center_mm.x.toFixed(2)}, ${circle.center_mm.y.toFixed(2)}) mm，直徑 ${circle.diameter_mm.toFixed(2)} mm（估計範圍 ${circle.diameter_min_mm.toFixed(2)}–${circle.diameter_max_mm.toFixed(2)} mm），${state}`;
+    }),
     ...(data.validation?.issues || []).map((issue) => issue.message),
   ];
   for (const text of [...new Set(messages)]) {
@@ -447,7 +461,11 @@ function showManifest(data) {
     `promptcad-${data.job_id}.zip`,
   );
   manufacturingPanel.hidden = false;
-  void loadManufacturingReview();
+  if (data.artifacts.some((artifact) => artifact.filename === 'drawing-spec.json')) {
+    void loadManufacturingReview();
+  } else {
+    renderManufacturingReview(null);
+  }
 }
 
 function renderManufacturingReview(review) {
@@ -637,12 +655,20 @@ analyzeImageBtn.addEventListener('click', async () => {
   const knownLength = Number(knownLengthEl.value);
   const thickness = Number(imageThicknessEl.value);
   const pageNumber = Number(imagePageEl.value);
+  const objectIndexText = imageObjectIndexEl.value.trim();
+  const objectIndex = objectIndexText === '' ? null : Number(objectIndexText);
   if (!file) {
     setStatus('請先選擇圖片或 PDF。', true);
     return;
   }
-  if (!(knownLength > 0) || !(thickness > 0) || !Number.isInteger(pageNumber) || pageNumber < 1) {
-    setStatus('校準長度與厚度必須大於 0，PDF 頁碼必須是正整數。', true);
+  if (
+    !(knownLength > 0)
+    || !(thickness > 0)
+    || !Number.isInteger(pageNumber)
+    || pageNumber < 1
+    || (objectIndex !== null && (!Number.isInteger(objectIndex) || objectIndex < 0))
+  ) {
+    setStatus('校準長度與厚度必須大於 0，頁碼與候選索引必須是有效整數。', true);
     return;
   }
 
@@ -654,6 +680,9 @@ analyzeImageBtn.addEventListener('click', async () => {
   body.append('thickness_mm', String(thickness));
   body.append('page_index', String(pageNumber - 1));
   body.append('perspective_correction', String(perspectiveCorrectionEl.checked));
+  body.append('content_profile', imageContentProfileEl.value);
+  body.append('accept_line_art_holes', String(acceptLineArtHolesEl.checked));
+  if (objectIndex !== null) body.append('object_index', String(objectIndex));
   analyzeImageBtn.disabled = true;
   setStatus('正在安全解碼、校準並擷取輪廓與圓孔…');
   setBadge('ANALYZING', 'neutral');

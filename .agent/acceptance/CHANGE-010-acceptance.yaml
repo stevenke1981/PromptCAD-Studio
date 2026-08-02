@@ -1,0 +1,27 @@
+change_id: CHANGE-010
+status: passed
+accepted_at: 2026-08-01
+build_or_launch: PASS
+requested_user_scenario: PASS
+affected_regression: PASS
+critical_flows: PASS
+visible_result: PASS
+critical_errors: NONE
+evidence:
+  - 226 full-suite pytest tests passed with 84 percent app coverage
+  - Manufacturing core, searchable PDF, REST lifecycle, CLI, async worker, request-limit, tamper, concurrency, and crash-recovery tests passed
+  - Web mounting-plate flow created a 4746-character typed drawing spec and a manufacturing package
+  - Web draft version 0 transitioned to in_review version 1 and approved version 2
+  - Reloaded API state remained approved with two append-only review events
+  - Web exposed 21 downloads including additive drawing specs, PDFs, review snapshots, and bundle ZIP
+  - Web acceptance completed with zero console errors and zero page errors
+  - Screenshot .agent/acceptance/CHANGE-010-web.png
+safety:
+  - Geometry, drawing spec, draft PDF, current PDF, and review snapshots are hash-bound
+  - Stale versions, tampering, illegal transitions, and terminal mutations fail closed
+  - Expired interrupted claims remove only version-scoped orphan derivatives and recover after a bounded lease
+  - Active cross-process claims remain protected
+  - Reviewer names are explicitly self-asserted and are not cryptographic or legal signatures
+limitations:
+  - This bounded package does not claim full ASME Y14.5 or ISO GPS coverage
+  - PKI-backed signatures, assemblies, and arbitrary detail or section views remain outside this contract
